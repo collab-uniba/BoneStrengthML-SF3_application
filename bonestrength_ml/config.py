@@ -64,6 +64,7 @@ class DatasetConfig(BaseModel):
     """Dataset configuration."""
 
     name: str
+    path: Path
     source: str
     provenance: str
     version: str
@@ -249,13 +250,21 @@ class BoneStrengthMLConfig(BaseModel):
         return cls.model_validate(data)
 
 
+# Project root directory (parent of bonestrength_ml package)
+PROJECT_ROOT = Path(__file__).parent.parent
+
+
 def load_config(path: str | Path = "config/BoneStrengthML.yml") -> BoneStrengthMLConfig:
     """Load and validate the BoneStrengthML configuration.
 
     Args:
         path: Path to the configuration file. Defaults to config/BoneStrengthML.yml.
+              Relative paths are resolved from the project root directory.
 
     Returns:
         Validated configuration object.
     """
+    path = Path(path)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
     return BoneStrengthMLConfig.from_yaml(path)

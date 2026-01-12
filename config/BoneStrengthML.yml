@@ -1,5 +1,6 @@
 dataset:
   name: BoneStrengthML-dataset
+  path: ../data/raw/sampleDataset.csv
   source: Published dataset used for BoneStrength surrogate model
   provenance: "<DOI or internal reference>"
   version: v1
@@ -488,7 +489,7 @@ dataset:
   outputs:
     - name: maxStrain_11
       data_type: float
-      range: [0, 0.001]
+      range: [0, 0.008]
       units: adimensional
       missing_values_allowed: false
     - name: maxStrain_33
@@ -498,11 +499,10 @@ dataset:
       missing_values_allowed: false
   duplicate_rows: false
 
-
 gate_thresholds:
   validation:
-    - field: maxStrain_11  # Check che sia uno degli output?
-      metric: MaximumAbsoluteError  # Oppure InfinityNorm, qui dobbiamo decidere un dizionario di metriche ammissibili (RMSE, PercentageRMSE, ecc.)
+    - field: maxStrain_11 # Check che sia uno degli output?
+      metric: MaximumAbsoluteError # Oppure InfinityNorm, qui dobbiamo decidere un dizionario di metriche ammissibili (RMSE, PercentageRMSE, ecc.)
       value: 0.000051
     - field: maxStrain_33
       metric: MaximumAbsoluteError
@@ -531,11 +531,10 @@ gate_thresholds:
         metric: StandardDeviation
         value: 0.0000073
 
-
 test_configurations:
   verification:
     convergence:
-      n_rows: [100, 250, 500, 1000]  # Forse anche questo ha senso farlo relativo invece che assoluto (o poter scegliere)?
+      n_rows: [100, 250, 500, 1000] # Forse anche questo ha senso farlo relativo invece che assoluto (o poter scegliere)?
     existence:
       samples: 1000000
     smoothness:
@@ -544,26 +543,24 @@ test_configurations:
     numerical_error:
       sets: 10
 
-
-
 model_development:
   train_test_split:
     train_fraction: 0.7
     method: random
 
   preprocessing:
-    normalization: false  # Definire dizionario (su ogni campo di input? Può variare per i vari modelli testati?)
+    normalization: false # Definire dizionario (su ogni campo di input? Può variare per i vari modelli testati?)
     standardization: false # Definire dizionario (come sopra)
 
   optimization:
-    feature_selection: null  # Anche qui metterei un dizionario con i metodi possibili (ed eventuali campi ulteriori per parametri del feature selector; può variare per i diversi modelli?)
-    optimization_method: GridSearch  # Uguale per tutti i modelli?
+    feature_selection: null # Anche qui metterei un dizionario con i metodi possibili (ed eventuali campi ulteriori per parametri del feature selector; può variare per i diversi modelli?)
+    optimization_method: GridSearch # Uguale per tutti i modelli?
     n_jobs: -1
     cv: 5
     scoring: null
 
   model_list:
-    - type: RandomForestRegressor  # Definire dizionario
+    - type: RandomForestRegressor # Definire dizionario
       optimization:
         feature_selection: null
         optimization_method: RandomizedSearchCV
@@ -599,7 +596,7 @@ model_development:
         fit_intercept: true
     - type: MLPRegressor
       hyperparameters:
-        hidden_layer_sizes: [[50,], [100,], [50, 50]]
+        hidden_layer_sizes: [[50], [100], [50, 50]]
         activation: [relu, tanh]
         alpha: [0.0001, 0.01]
         learning_rate_init: [0.001, 0.01]
