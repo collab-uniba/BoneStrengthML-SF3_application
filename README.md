@@ -78,6 +78,19 @@ bonestrength-train mlflow-ui
 
 Then open http://localhost:5000 in your browser.
 
+### Workflow Monitoring (Optional)
+
+The training pipeline uses Prefect for orchestration, running locally by default. To enable the Prefect UI for workflow monitoring:
+
+1. Start the Prefect server (in a separate terminal):
+   ```bash
+   prefect server start
+   ```
+
+2. Open http://localhost:4200 in your browser
+
+3. Run training as usual - flows will appear in the UI
+
 ### Configuration
 
 List configured models:
