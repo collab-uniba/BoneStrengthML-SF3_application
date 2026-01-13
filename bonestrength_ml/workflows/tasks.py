@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 from prefect import task
+from prefect.runtime import task_run
 
 from bonestrength_ml.config import BoneStrengthMLConfig, ModelConfig, load_config
 from bonestrength_ml.data_loading import (
@@ -70,19 +71,18 @@ def task_setup_mlflow(
     return setup_mlflow(tracking_uri, experiment_name)
 
 
-def _train_task_run_name(
-    model_config: ModelConfig,
-    data: TrainTestData,
-    **kwargs,
-) -> str:
+def _train_task_run_name() -> str:
     """Generate descriptive task run name for training tasks."""
+    params = task_run.parameters
+    model_config = params["model_config"]
+    data = params["data"]
     model_name = model_config.label or model_config.type
     return f"train_{model_name}_{data.output_name}"
 
 
 @task(
     name="train_model",
-    task_run_name=_train_task_run_name,  # type: ignore[call-overload]
+    task_run_name=_train_task_run_name,
     retries=2,
     retry_delay_seconds=10,
     tags=["training"],
