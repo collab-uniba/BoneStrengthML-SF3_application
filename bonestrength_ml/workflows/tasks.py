@@ -70,8 +70,19 @@ def task_setup_mlflow(
     return setup_mlflow(tracking_uri, experiment_name)
 
 
+def _train_task_run_name(
+    model_config: ModelConfig,
+    data: TrainTestData,
+    **kwargs,
+) -> str:
+    """Generate descriptive task run name for training tasks."""
+    model_name = model_config.label or model_config.type
+    return f"train_{model_name}_{data.output_name}"
+
+
 @task(
     name="train_model",
+    task_run_name=_train_task_run_name,  # type: ignore[call-overload]
     retries=2,
     retry_delay_seconds=10,
     tags=["training"],
