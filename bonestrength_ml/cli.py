@@ -212,8 +212,6 @@ def convergence_test(
         # Test convergence using a specific MLflow run
         bsml convergence-test --output maxStrain_11 --run-id <run_id>
     """
-    import numpy as np
-
     from bonestrength_ml.config import load_config
     from bonestrength_ml.data_loading import (
         get_input_columns,
@@ -221,7 +219,7 @@ def convergence_test(
         load_and_validate_data,
     )
     from bonestrength_ml.training.mlflow_utils import load_best_run
-    from bonestrength_ml.training.splitter import split_data_for_all_outputs
+    from bonestrength_ml.training.splitter import prepare_train_test_split
     from bonestrength_ml.verification import run_convergence_test
 
     console.print("[bold blue]BoneStrengthML Convergence Test[/bold blue]")
@@ -234,26 +232,16 @@ def convergence_test(
     cfg = load_config(config) if config else load_config()
     df = load_and_validate_data(config=cfg)
 
-    input_cols = get_input_columns(cfg)
-    output_cols = get_output_columns(cfg)
-    X = df[input_cols]
-    y = df[output_cols]
+    X = df[get_input_columns(cfg)]
+    y = df[get_output_columns(cfg)]
 
     # Validate output name
     if output not in y.columns:
         console.print(f"[red]Error: '{output}' is not a valid output. Choose from: {list(y.columns)}[/red]")
         raise typer.Exit(code=1)
 
-    # 2. Train/test split (same logic as training)
-    split_config = cfg.model_development.train_test_split
-    groups = None
-    if split_config.method == "grouped":
-        pc_columns = [f.name for f in cfg.dataset.inputs if f.name.startswith("PC_")]
-        groups = X.groupby(pc_columns, sort=False).ngroup().values
-
-    split_data = split_data_for_all_outputs(
-        X, y, split_config=split_config, random_state=seed, groups=groups,
-    )
+    # 2. Train/test split (same function used by training pipeline)
+    split_data = prepare_train_test_split(X, y, cfg, random_state=seed)
     data = split_data[output]
 
     # 3. Load reference model from MLflow
