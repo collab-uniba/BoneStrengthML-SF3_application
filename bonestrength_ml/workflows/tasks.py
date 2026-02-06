@@ -53,12 +53,25 @@ def task_split_data(
     config: BoneStrengthMLConfig,
     random_state: int = 42,
 ) -> dict[str, TrainTestData]:
-    """Split data for all outputs."""
+    """Split data for all outputs.
+
+    When split method is "grouped", derives patient group labels from the
+    principal component columns (PC_*) so that all rows belonging to the
+    same patient end up exclusively in either train or test.
+    """
+    split_config = config.model_development.train_test_split
+
+    groups = None
+    if split_config.method == "grouped":
+        pc_columns = [f.name for f in config.dataset.inputs if f.name.startswith("PC_")]
+        groups = X.groupby(pc_columns, sort=False).ngroup().values
+
     return split_data_for_all_outputs(
         X,
         y,
-        split_config=config.model_development.train_test_split,
+        split_config=split_config,
         random_state=random_state,
+        groups=groups,
     )
 
 

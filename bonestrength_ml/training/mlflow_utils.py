@@ -69,6 +69,7 @@ def log_training_result(
             "model_label": result.model_label,
             "output_name": result.output_name,
             "train_fraction": config.model_development.train_test_split.train_fraction,
+            "split_method": config.model_development.train_test_split.method,
             "cv_folds": opt_config.cv,
             "optimization_method": opt_config.optimization_method,
         }
