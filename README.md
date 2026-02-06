@@ -47,25 +47,25 @@ uv sync
 Train all configured models for all outputs:
 
 ```bash
-bonestrength-train train
+bsml train
 ```
 
 Train models for a specific output:
 
 ```bash
-bonestrength-train train --output maxStrain_11
+bsml train --output maxStrain_11
 ```
 
 Train a specific model for a specific output:
 
 ```bash
-bonestrength-train train --output maxStrain_11 --model RandomForestRegressor
+bsml train --output maxStrain_11 --model RandomForestRegressor
 ```
 
 Register best models in MLflow Model Registry:
 
 ```bash
-bonestrength-train train --register
+bsml train --register
 ```
 
 ### Viewing Results
@@ -73,7 +73,7 @@ bonestrength-train train --register
 Start the MLflow UI to explore experiment results:
 
 ```bash
-bonestrength-train mlflow-ui
+bsml mlflow-ui
 ```
 
 Then open http://localhost:5000 in your browser.
@@ -96,7 +96,7 @@ The training pipeline uses Prefect for orchestration, running locally by default
 List configured models:
 
 ```bash
-bonestrength-train list-models
+bsml list-models
 ```
 
 All pipeline behavior is controlled via `config/BoneStrengthML.yml`, including:

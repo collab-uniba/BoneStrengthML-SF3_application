@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 app = typer.Typer(
-    name="bonestrength-train",
+    name="bsml",
     help="BoneStrengthML training pipeline with MLflow tracking",
 )
 console = Console()
@@ -63,16 +63,16 @@ def train(
     Examples:
 
         # Train all models for all outputs
-        bonestrength-train train
+        bsml train
 
         # Train all models for specific output
-        bonestrength-train train --output maxStrain_11
+        bsml train --output maxStrain_11
 
         # Train specific model for specific output
-        bonestrength-train train --output maxStrain_11 --model RandomForestRegressor
+        bsml train --output maxStrain_11 --model RandomForestRegressor
 
         # Use custom config and register best models
-        bonestrength-train train -c custom_config.yml --register
+        bsml train -c custom_config.yml --register
     """
     from bonestrength_ml.workflows.flows import (
         train_all_outputs_flow,

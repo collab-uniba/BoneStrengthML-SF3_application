@@ -68,10 +68,10 @@ uv sync
 
 ```bash
 # Check CLI is available
-uv run bonestrength-train --help
+uv run bsml --help
 
 # List configured models
-uv run bonestrength-train list-models
+uv run bsml list-models
 ```
 
 ## 7. Configure Prefect Server (Optional - for UI)
@@ -92,17 +92,17 @@ The Prefect UI will be available at `http://<server-ip>:${PREFECT_PORT}`
 
 ```bash
 # Train all models
-uv run bonestrength-train train
+uv run bsml train
 
 # Or train specific output/model
-uv run bonestrength-train train --output maxStrain_11
+uv run bsml train --output maxStrain_11
 ```
 
 ## 9. View MLflow Results
 
 ```bash
 # Start MLflow UI on custom port
-uv run bonestrength-train mlflow-ui --port ${MLFLOW_PORT}
+uv run bsml mlflow-ui --port ${MLFLOW_PORT}
 ```
 
 The MLflow UI will be available at `http://<server-ip>:${MLFLOW_PORT}`
@@ -152,7 +152,7 @@ After=network.target
 Type=simple
 User=<your-user>
 WorkingDirectory=/path/to/BoneStrengthML-SF3_application
-ExecStart=/home/<your-user>/.local/bin/uv run bonestrength-train mlflow-ui --port 5050
+ExecStart=/home/<your-user>/.local/bin/uv run bsml mlflow-ui --port 5050
 Restart=always
 
 [Install]

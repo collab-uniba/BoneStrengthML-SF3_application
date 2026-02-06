@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-bonestrength-train = "bonestrength_ml.cli:app"
+bsml = "bonestrength_ml.cli:app"
 
 [tool.uv]
 package = true
