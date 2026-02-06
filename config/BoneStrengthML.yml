@@ -525,10 +525,10 @@ gate_thresholds:
         value: 1
     numerical_error:
       - field: maxStrain_11
-        metric: StandardDeviation
+        metric: MaxStandardDeviation
         value: 0.0000051
       - field: maxStrain_33
-        metric: StandardDeviation
+        metric: MaxStandardDeviation
         value: 0.0000073
 
 test_configurations:
