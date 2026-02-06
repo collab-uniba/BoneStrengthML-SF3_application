@@ -153,6 +153,184 @@ def mlflow_ui(
 
 
 @app.command()
+def convergence_test(
+    output: str = typer.Option(
+        ...,
+        "--output",
+        "-o",
+        help="Output name to test (e.g. maxStrain_11)",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Model type to test. Auto-selects best if not specified.",
+    ),
+    run_id: Optional[str] = typer.Option(
+        None,
+        "--run-id",
+        help="Specific MLflow run ID. Auto-discovers best if not specified.",
+    ),
+    config: Optional[str] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to configuration file",
+    ),
+    mlflow_uri: str = typer.Option(
+        "sqlite:///mlruns.db",
+        "--mlflow-uri",
+        help="MLflow tracking URI",
+    ),
+    experiment: str = typer.Option(
+        "BoneStrengthML",
+        "--experiment",
+        "-e",
+        help="MLflow experiment name",
+    ),
+    seed: int = typer.Option(
+        42,
+        "--seed",
+        "-s",
+        help="Random seed for reproducibility",
+    ),
+) -> None:
+    """Run convergence verification test.
+
+    Compares models trained on increasing subset sizes against a fully-trained
+    reference model loaded from MLflow. Reports whether predictions converge
+    (MRE < threshold) and the minimum training set size K for convergence.
+
+    Examples:
+
+        # Test convergence for maxStrain_11 (auto-selects best model)
+        bsml convergence-test --output maxStrain_11
+
+        # Test convergence for a specific model type
+        bsml convergence-test --output maxStrain_11 --model RandomForestRegressor
+
+        # Test convergence using a specific MLflow run
+        bsml convergence-test --output maxStrain_11 --run-id <run_id>
+    """
+    import numpy as np
+
+    from bonestrength_ml.config import load_config
+    from bonestrength_ml.data_loading import (
+        get_input_columns,
+        get_output_columns,
+        load_and_validate_data,
+    )
+    from bonestrength_ml.training.mlflow_utils import load_best_run
+    from bonestrength_ml.training.splitter import split_data_for_all_outputs
+    from bonestrength_ml.verification import run_convergence_test
+
+    console.print("[bold blue]BoneStrengthML Convergence Test[/bold blue]")
+    console.print(f"Output: {output}")
+    console.print(f"MLflow URI: {mlflow_uri}")
+    console.print(f"Random seed: {seed}")
+    console.print()
+
+    # 1. Load config and data
+    cfg = load_config(config) if config else load_config()
+    df = load_and_validate_data(config=cfg)
+
+    input_cols = get_input_columns(cfg)
+    output_cols = get_output_columns(cfg)
+    X = df[input_cols]
+    y = df[output_cols]
+
+    # Validate output name
+    if output not in y.columns:
+        console.print(f"[red]Error: '{output}' is not a valid output. Choose from: {list(y.columns)}[/red]")
+        raise typer.Exit(code=1)
+
+    # 2. Train/test split (same logic as training)
+    split_config = cfg.model_development.train_test_split
+    groups = None
+    if split_config.method == "grouped":
+        pc_columns = [f.name for f in cfg.dataset.inputs if f.name.startswith("PC_")]
+        groups = X.groupby(pc_columns, sort=False).ngroup().values
+
+    split_data = split_data_for_all_outputs(
+        X, y, split_config=split_config, random_state=seed, groups=groups,
+    )
+    data = split_data[output]
+
+    # 3. Load reference model from MLflow
+    console.print("Loading reference model from MLflow...")
+    best_run = load_best_run(
+        output_name=output,
+        tracking_uri=mlflow_uri,
+        experiment_name=experiment,
+        model_type=model,
+        run_id=run_id,
+    )
+    console.print(f"  Model type: {best_run.model_type}")
+    console.print(f"  Run ID: {best_run.run_id}")
+    console.print(f"  Best params: {best_run.best_params}")
+    console.print()
+
+    # 4. Generate reference predictions
+    ref_predictions = best_run.model.predict(data.X_test)
+
+    # 5. Look up convergence threshold from config
+    threshold = None
+    for criterion in cfg.gate_thresholds.verification.convergence:
+        if criterion.field == output:
+            threshold = criterion.value
+            break
+
+    if threshold is None:
+        console.print(f"[red]Error: No convergence threshold found for '{output}' in config.[/red]")
+        raise typer.Exit(code=1)
+
+    # 6. Get n_rows from test configuration
+    n_rows = cfg.test_configurations.verification.convergence.n_rows
+
+    # 7. Run convergence test
+    console.print(f"Running convergence test (threshold: {threshold:.1%})...")
+    console.print(f"Subset sizes: {n_rows}")
+    console.print()
+
+    result = run_convergence_test(
+        X_train=data.X_train,
+        y_train=data.y_train,
+        X_eval=data.X_test,
+        ref_predictions=ref_predictions,
+        model_type=best_run.model_type,
+        best_params=best_run.best_params,
+        n_rows=n_rows,
+        threshold=threshold,
+        output_name=output,
+        random_state=seed,
+    )
+
+    # 8. Print results table
+    table = Table(title=f"Convergence Test: {output} ({best_run.model_type})")
+    table.add_column("n_rows", style="cyan", justify="right")
+    table.add_column("MRE", style="green", justify="right")
+    table.add_column("Threshold", style="yellow", justify="right")
+    table.add_column("Status", justify="center")
+
+    for k, error in zip(result.n_rows_tested, result.errors):
+        status = "[green]PASS[/green]" if error < threshold else "[red]FAIL[/red]"
+        table.add_row(
+            str(k),
+            f"{error:.4%}",
+            f"{threshold:.4%}",
+            status,
+        )
+
+    console.print(table)
+    console.print()
+
+    if result.converged:
+        console.print(f"[green]Converged![/green] Minimum K = {result.min_k}")
+    else:
+        console.print("[red]No convergence.[/red] MRE exceeds threshold for all tested subset sizes.")
+
+
+@app.command()
 def list_models(
     config: Optional[str] = typer.Option(
         None,
