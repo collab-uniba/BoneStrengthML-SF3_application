@@ -194,6 +194,11 @@ def convergence_test(
         "-s",
         help="Random seed for reproducibility",
     ),
+    eval_method: str = typer.Option(
+        "lhs",
+        "--eval-method",
+        help="Evaluation method: 'lhs' (Latin Hypercube Sampling, default) or 'test-set'.",
+    ),
 ) -> None:
     """Run convergence verification test.
 
@@ -205,6 +210,12 @@ def convergence_test(
 
         # Test convergence for maxStrain_11 (auto-selects best model)
         bsml convergence-test --output maxStrain_11
+
+        # Test with LHS evaluation (default)
+        bsml convergence-test --output maxStrain_11 --eval-method lhs
+
+        # Test with test-set evaluation (previous behavior)
+        bsml convergence-test --output maxStrain_11 --eval-method test-set
 
         # Test convergence for a specific model type
         bsml convergence-test --output maxStrain_11 --model RandomForestRegressor
@@ -220,10 +231,16 @@ def convergence_test(
     )
     from bonestrength_ml.training.mlflow_utils import load_best_run
     from bonestrength_ml.training.splitter import prepare_train_test_split
-    from bonestrength_ml.verification import run_convergence_test
+    from bonestrength_ml.verification import generate_lhs_samples, run_convergence_test
+
+    # Validate eval_method
+    if eval_method not in ("lhs", "test-set"):
+        console.print(f"[red]Error: --eval-method must be 'lhs' or 'test-set', got '{eval_method}'[/red]")
+        raise typer.Exit(code=1)
 
     console.print("[bold blue]BoneStrengthML Convergence Test[/bold blue]")
     console.print(f"Output: {output}")
+    console.print(f"Eval method: {eval_method}")
     console.print(f"MLflow URI: {mlflow_uri}")
     console.print(f"Random seed: {seed}")
     console.print()
@@ -258,8 +275,19 @@ def convergence_test(
     console.print(f"  Best params: {best_run.best_params}")
     console.print()
 
-    # 4. Generate reference predictions
-    ref_predictions = best_run.model.predict(data.X_test)
+    # 4. Build evaluation data and reference predictions
+    if eval_method == "lhs":
+        lhs_sample_size = cfg.test_configurations.verification.existence.samples
+        console.print(f"Generating {lhs_sample_size} LHS samples for evaluation...")
+        X_eval = generate_lhs_samples(
+            inputs=cfg.dataset.inputs,
+            sample_size=lhs_sample_size,
+            random_state=seed,
+        )
+        ref_predictions = best_run.model.predict(X_eval)
+    else:
+        X_eval = data.X_test
+        ref_predictions = best_run.model.predict(data.X_test)
 
     # 5. Look up convergence threshold from config
     threshold = None
@@ -283,7 +311,7 @@ def convergence_test(
     result = run_convergence_test(
         X_train=data.X_train,
         y_train=data.y_train,
-        X_eval=data.X_test,
+        X_eval=X_eval,
         ref_predictions=ref_predictions,
         model_type=best_run.model_type,
         best_params=best_run.best_params,
