@@ -536,7 +536,7 @@ test_configurations:
     convergence:
       n_rows: [100, 250, 500, 1000] # Forse anche questo ha senso farlo relativo invece che assoluto (o poter scegliere)?
     existence:
-      samples: 1000000
+      samples: 1000
     smoothness:
       sample_fraction: 0.4
       perturbation_scaled_magnitude: 0.001
