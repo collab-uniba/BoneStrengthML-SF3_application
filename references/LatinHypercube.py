@@ -36,7 +36,6 @@ def _LHmaximin(
 
         distIter = pdc(candCoord, metric="euclidean")
         for matChunk in distIter:
-            assert matChunk
             minDist = np.min(matChunk, where=(matChunk != 0), initial=np.inf)
             if candDist > minDist:
                 candDist = minDist
@@ -56,7 +55,7 @@ def LHgen(
     randGen: np.random.Generator = np.random.default_rng(),
 ) -> NDArray[np.float64]:
     """
-    Find the coordinates of the nodes associated to an element.
+    Generate a Latin Hypercube Sampling (LHS) design.
 
     Parameters
     ----------
@@ -90,6 +89,8 @@ def LHgen(
         samples = _LHbasic(parNum, sampleSize, randGen)
     elif optimization == "maximin":
         samples = _LHmaximin(parNum, sampleSize, randGen, iterNum)
+    else:
+        raise ValueError(f"Unsupported optimization method: {optimization!r}")
 
     return samples
 
