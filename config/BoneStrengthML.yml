@@ -555,7 +555,7 @@ model_development:
   optimization:
     feature_selection: null # Anche qui metterei un dizionario con i metodi possibili (ed eventuali campi ulteriori per parametri del feature selector; può variare per i diversi modelli?)
     optimization_method: GridSearch # Uguale per tutti i modelli?
-    n_jobs: -1
+    n_jobs: 1
     cv: 5
     scoring: None
 
@@ -564,7 +564,7 @@ model_development:
       optimization:
         feature_selection: null
         optimization_method: RandomizedSearchCV
-        n_jobs: -1
+        n_jobs: 1
         cv: 5
       hyperparameters:
         criterion: squared_error
@@ -575,7 +575,7 @@ model_development:
     - type: XGBoostRegressor
       optimization:
         optimization_method: RandomizedSearchCV
-        n_jobs: -1
+        n_jobs: 1
         cv: 5
       hyperparameters:
         objective: reg:squarederror
