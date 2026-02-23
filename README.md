@@ -102,7 +102,7 @@ bsml list-models
 All pipeline behavior is controlled via `config/BoneStrengthML.yml`, including:
 
 - Dataset path and format
-- Model types and hyperparameter grids
+- Model types and hyperparameter grids (RandomForest, XGBoost, SVM, Linear, MLP, PLS, CatBoost, GaussianProcess)
 - Train/test split configuration
 - Validation thresholds
 
@@ -114,11 +114,14 @@ bonestrength_ml/
     data_loading.py     # Data loading and validation with Pandera
     cli.py              # Command-line interface
     training/           # Model training pipeline
-        model_factory.py    # Model instantiation from config
+        model_factory.py    # Model instantiation from config (incl. GPR Pipeline & kernel registry)
         metrics.py          # Evaluation metrics
         splitter.py         # Train/test splitting
         trainer.py          # Hyperparameter optimization
         mlflow_utils.py     # MLflow integration
+    verification/       # Verification tests
+        convergence.py      # Convergence test across training set sizes
+        latin_hypercube.py  # Latin Hypercube sampling for input space coverage
     workflows/          # Prefect orchestration
         tasks.py            # Prefect tasks
         flows.py            # Training flows (parallel execution)

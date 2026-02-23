@@ -612,3 +612,9 @@ model_development:
         learning_rate: [0.01, 0.1, 0.3]
         l2_leaf_reg: [3, 5, 10]
         bagging_temperature: [0.2, 0.6, 1.0]
+    - type: GaussianProcessRegressor
+      hyperparameters:
+        normalize_y: true
+        optimizer: "fmin_l_bfgs_b"
+        kernel: ["rbf_short", "rbf_unit", "rbf_dot_white"]
+        alpha: [1.0e-5, 1.0e-2, 1.0e-1]

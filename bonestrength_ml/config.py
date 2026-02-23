@@ -197,6 +197,7 @@ class ModelConfig(BaseModel):
         "MLPRegressor",
         "PLSRegression",
         "CatBoostRegressor",
+        "GaussianProcessRegressor",
     ]
     label: str | None = None
     hyperparameters: dict

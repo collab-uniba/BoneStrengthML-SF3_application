@@ -1,13 +1,12 @@
 """Convergence test for verifying model stability across training set sizes."""
 
-import inspect
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
 from bonestrength_ml.training.metrics import mean_relative_error
-from bonestrength_ml.training.model_factory import MODEL_REGISTRY
+from bonestrength_ml.training.model_factory import recreate_model
 
 
 @dataclass
@@ -21,54 +20,6 @@ class ConvergenceResult:
     threshold: float
     min_k: int | None
     converged: bool
-
-
-def _coerce_param_types(model_class: type, params: dict[str, str]) -> dict:
-    """Coerce string parameter values from MLflow to appropriate Python types.
-
-    MLflow stores all parameters as strings. This inspects the model class
-    constructor signature to infer the correct types and converts accordingly.
-    """
-    sig = inspect.signature(model_class.__init__)
-    coerced = {}
-    for k, v in params.items():
-        param = sig.parameters.get(k)
-        if param is not None and param.annotation != inspect.Parameter.empty:
-            ann = param.annotation
-            # Handle optional types and unions — try the raw annotation first
-            try:
-                if ann is bool or (hasattr(ann, "__origin__") and bool in getattr(ann, "__args__", ())):
-                    coerced[k] = v.lower() in ("true", "1", "yes")
-                elif ann is int:
-                    coerced[k] = int(v)
-                elif ann is float:
-                    coerced[k] = float(v)
-                else:
-                    coerced[k] = v
-                continue
-            except (ValueError, TypeError):
-                pass
-
-        # Fallback: try numeric conversion heuristically
-        if isinstance(v, str):
-            # Try int
-            try:
-                coerced[k] = int(v)
-                continue
-            except ValueError:
-                pass
-            # Try float
-            try:
-                coerced[k] = float(v)
-                continue
-            except ValueError:
-                pass
-            # Bool-like strings
-            if v.lower() in ("true", "false"):
-                coerced[k] = v.lower() == "true"
-                continue
-        coerced[k] = v
-    return coerced
 
 
 def run_convergence_test(
@@ -109,18 +60,6 @@ def run_convergence_test(
     Returns:
         ConvergenceResult with errors per subset size and convergence info.
     """
-    model_class = MODEL_REGISTRY.get(model_type)
-    if model_class is None:
-        raise ValueError(f"Unknown model type: {model_type}")
-
-    # Coerce string params from MLflow to proper types
-    coerced_params = _coerce_param_types(model_class, best_params)
-
-    # Add random_state if supported
-    sig = inspect.signature(model_class.__init__)
-    if "random_state" in sig.parameters:
-        coerced_params["random_state"] = random_state
-
     rng = np.random.default_rng(random_state)
     errors: list[float] = []
 
@@ -131,7 +70,7 @@ def run_convergence_test(
         y_subset = y_train.iloc[indices]
 
         # Instantiate fresh model with same hyperparameters
-        fresh_model = model_class(**coerced_params)
+        fresh_model = recreate_model(model_type, best_params, random_state)
         fresh_model.fit(X_subset, y_subset)
 
         # Predict on evaluation set and compute MRE
