@@ -72,8 +72,9 @@ def train_single_model(
         cv_results = search.cv_results_
 
     # Evaluate on train and test
-    y_pred_train = best_estimator.predict(data.X_train)
-    y_pred_test = best_estimator.predict(data.X_test)
+    # ravel() ensures 1D output (PLSRegression returns 2D arrays)
+    y_pred_train = best_estimator.predict(data.X_train).ravel()
+    y_pred_test = best_estimator.predict(data.X_test).ravel()
 
     train_metrics = evaluate_predictions(data.y_train.values, y_pred_train)
     test_metrics = evaluate_predictions(data.y_test.values, y_pred_test)

@@ -195,6 +195,8 @@ class ModelConfig(BaseModel):
         "SupportVectorRegressor",
         "LinearRegressor",
         "MLPRegressor",
+        "PLSRegression",
+        "CatBoostRegressor",
     ]
     label: str | None = None
     hyperparameters: dict

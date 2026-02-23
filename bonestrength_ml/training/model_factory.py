@@ -3,7 +3,9 @@
 import inspect
 from typing import Any
 
+from catboost import CatBoostRegressor
 from sklearn.base import BaseEstimator
+from sklearn.cross_decomposition import PLSRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.neural_network import MLPRegressor
@@ -19,6 +21,8 @@ MODEL_REGISTRY: dict[str, type[BaseEstimator]] = {
     "SupportVectorRegressor": SVR,
     "LinearRegressor": LinearRegression,
     "MLPRegressor": MLPRegressor,
+    "PLSRegression": PLSRegression,
+    "CatBoostRegressor": CatBoostRegressor,
 }
 
 
@@ -42,8 +46,12 @@ def create_model(model_config: ModelConfig, random_state: int = 42) -> BaseEstim
     # Extract fixed hyperparameters (non-list values)
     fixed_params = _extract_fixed_params(model_config.hyperparameters)
 
-    # Add random_state if model supports it
-    if _supports_param(model_class, "random_state"):
+    # Add random seed if model supports it.
+    # Check random_seed first: CatBoost exposes random_state for sklearn
+    # compatibility but only random_seed actually takes effect.
+    if _supports_param(model_class, "random_seed"):
+        fixed_params["random_seed"] = random_state
+    elif _supports_param(model_class, "random_state"):
         fixed_params["random_state"] = random_state
 
     return model_class(**fixed_params)

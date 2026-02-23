@@ -557,7 +557,7 @@ model_development:
     optimization_method: GridSearch # Uguale per tutti i modelli?
     n_jobs: -1
     cv: 5
-    scoring: null
+    scoring: None
 
   model_list:
     - type: RandomForestRegressor # Definire dizionario
@@ -568,8 +568,8 @@ model_development:
         cv: 5
       hyperparameters:
         criterion: squared_error
-        n_estimators: [50, 500]
-        max_depth: [3, 30]
+        n_estimators: [50, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 750]
+        max_depth: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
         min_samples_split: [2, 10]
         min_samples_leaf: [1, 5]
     - type: XGBoostRegressor
@@ -579,19 +579,20 @@ model_development:
         cv: 5
       hyperparameters:
         objective: reg:squarederror
-        n_estimators: [100, 600]
-        max_depth: [3, 12]
-        learning_rate: [0.01, 0.3]
+        n_estimators: [100, 600, 1100, 1600, 2100, 2600, 3100, 3600, 4100, 4600, 5100, 5600, 6100, 6600, 7100, 7600]
+        max_depth: [3, 4, 5, 6, 7, 8, 9, 10]
+        learning_rate: [0.01, 0.05, 0.1, 0.2, 0.3]
         subsample: [0.5, 1.0]
         colsample_bytree: [0.5, 1.0]
+        gamma: [0, 0.1, 0.2, 0.3, 0.4, 0.5]
     - type: SupportVectorRegressor
       hyperparameters:
-        C: [0.1, 10.0]
-        epsilon: [0.01, 0.5]
+        C: [0.1, 1, 10, 100]
+        epsilon: [0.01, 0.1, 0.2, 0.5]
         gamma: [scale, auto]
-        kernel: rbf
-    - label: Bar
-      type: LinearRegressor
+        kernel: ["linear", "rbf", "poly"]
+        degree: [2, 3]
+    - type: LinearRegressor
       hyperparameters:
         fit_intercept: true
     - type: MLPRegressor
@@ -601,3 +602,13 @@ model_development:
         alpha: [0.0001, 0.01]
         learning_rate_init: [0.001, 0.01]
         max_iter: 2000
+    - type: PLSRegression
+      hyperparameters:
+        n_components: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94]
+    - type: CatBoostRegressor
+      hyperparameters:
+        iterations: [100, 500, 1000]
+        depth: [4, 6, 10]
+        learning_rate: [0.01, 0.1, 0.3]
+        l2_leaf_reg: [3, 5, 10]
+        bagging_temperature: [0.2, 0.6, 1.0]
