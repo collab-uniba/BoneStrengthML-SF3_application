@@ -347,6 +347,180 @@ def convergence_test(
 
 
 @app.command()
+def smoothness_test(
+    output: str = typer.Option(
+        ...,
+        "--output",
+        "-o",
+        help="Output name to test (e.g. maxStrain_11)",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Model type to test. Auto-selects best if not specified.",
+    ),
+    run_id: Optional[str] = typer.Option(
+        None,
+        "--run-id",
+        help="Specific MLflow run ID. Auto-discovers best if not specified.",
+    ),
+    config: Optional[str] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to configuration file",
+    ),
+    mlflow_uri: str = typer.Option(
+        "sqlite:///mlruns.db",
+        "--mlflow-uri",
+        help="MLflow tracking URI",
+    ),
+    experiment: str = typer.Option(
+        "BoneStrengthML",
+        "--experiment",
+        "-e",
+        help="MLflow experiment name",
+    ),
+    seed: int = typer.Option(
+        42,
+        "--seed",
+        "-s",
+        help="Random seed for reproducibility",
+    ),
+    eval_method: str = typer.Option(
+        "lhs",
+        "--eval-method",
+        help="Evaluation method: 'lhs' (Latin Hypercube Sampling, default) or 'test-set'.",
+    ),
+) -> None:
+    """Run smoothness verification test.
+
+    Checks that the model output varies smoothly under small input
+    perturbations by computing normalized partial derivatives (elasticity)
+    across sampled evaluation points.
+
+    Examples:
+
+        # Test smoothness for maxStrain_11 (auto-selects best model)
+        bsml smoothness-test --output maxStrain_11
+
+        # Test with test-set evaluation
+        bsml smoothness-test --output maxStrain_11 --eval-method test-set
+
+        # Test smoothness for a specific model type
+        bsml smoothness-test --output maxStrain_11 --model RandomForestRegressor
+
+        # Test smoothness using a specific MLflow run
+        bsml smoothness-test --output maxStrain_11 --run-id <run_id>
+    """
+    from bonestrength_ml.config import load_config
+    from bonestrength_ml.data_loading import (
+        get_input_columns,
+        get_output_columns,
+        load_and_validate_data,
+    )
+    from bonestrength_ml.training.mlflow_utils import load_best_run
+    from bonestrength_ml.training.splitter import prepare_train_test_split
+    from bonestrength_ml.verification import generate_lhs_samples, run_smoothness_test
+
+    # Validate eval_method
+    if eval_method not in ("lhs", "test-set"):
+        console.print(f"[red]Error: --eval-method must be 'lhs' or 'test-set', got '{eval_method}'[/red]")
+        raise typer.Exit(code=1)
+
+    console.print("[bold blue]BoneStrengthML Smoothness Test[/bold blue]")
+    console.print(f"Output: {output}")
+    console.print(f"Eval method: {eval_method}")
+    console.print(f"MLflow URI: {mlflow_uri}")
+    console.print(f"Random seed: {seed}")
+    console.print()
+
+    # 1. Load config and data
+    cfg = load_config(config) if config else load_config()
+    df = load_and_validate_data(config=cfg)
+
+    X = df[get_input_columns(cfg)]
+    y = df[get_output_columns(cfg)]
+
+    # Validate output name
+    if output not in y.columns:
+        console.print(f"[red]Error: '{output}' is not a valid output. Choose from: {list(y.columns)}[/red]")
+        raise typer.Exit(code=1)
+
+    # 2. Load model from MLflow
+    console.print("Loading model from MLflow...")
+    best_run = load_best_run(
+        output_name=output,
+        tracking_uri=mlflow_uri,
+        experiment_name=experiment,
+        model_type=model,
+        run_id=run_id,
+    )
+    console.print(f"  Model type: {best_run.model_type}")
+    console.print(f"  Run ID: {best_run.run_id}")
+    console.print()
+
+    # 3. Build evaluation data
+    if eval_method == "lhs":
+        lhs_sample_size = cfg.test_configurations.verification.existence.samples
+        console.print(f"Generating {lhs_sample_size} LHS samples for evaluation...")
+        X_eval = generate_lhs_samples(
+            inputs=cfg.dataset.inputs,
+            sample_size=lhs_sample_size,
+            random_state=seed,
+        )
+    else:
+        split_data = prepare_train_test_split(X, y, cfg, random_state=seed)
+        data = split_data[output]
+        X_eval = data.X_test
+
+    # 4. Look up smoothness threshold from config
+    threshold = None
+    for criterion in cfg.gate_thresholds.verification.smoothness:
+        if criterion.field == output:
+            threshold = criterion.value
+            break
+
+    if threshold is None:
+        console.print(f"[red]Error: No smoothness threshold found for '{output}' in config.[/red]")
+        raise typer.Exit(code=1)
+
+    # 5. Get smoothness test parameters from config
+    smoothness_cfg = cfg.test_configurations.verification.smoothness
+    sample_fraction = smoothness_cfg.sample_fraction
+    perturbation_scaled_magnitude = smoothness_cfg.perturbation_scaled_magnitude
+    input_ranges = [(inp.range[0], inp.range[1]) for inp in cfg.dataset.inputs]
+
+    # 6. Run smoothness test
+    console.print(f"Running smoothness test (threshold: {threshold})...")
+    console.print(f"Sample fraction: {sample_fraction}, perturbation magnitude: {perturbation_scaled_magnitude}")
+    console.print()
+
+    result = run_smoothness_test(
+        model=best_run.model,
+        X_eval=X_eval,
+        input_ranges=input_ranges,
+        sample_fraction=sample_fraction,
+        perturbation_scaled_magnitude=perturbation_scaled_magnitude,
+        threshold=threshold,
+        output_name=output,
+        model_type=best_run.model_type,
+        random_state=seed,
+    )
+
+    # 7. Print results
+    console.print(f"Max error ratio: {result.max_error_ratio:.6f}")
+    console.print(f"Threshold:       {result.threshold}")
+    console.print()
+
+    if result.passed:
+        console.print("[green]PASSED[/green] — model output is smooth within tolerance.")
+    else:
+        console.print("[red]FAILED[/red] — model output exceeds smoothness threshold.")
+
+
+@app.command()
 def list_models(
     config: Optional[str] = typer.Option(
         None,
