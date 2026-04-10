@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
-from bonestrength_ml.config import TrainTestSplitConfig
+from bonestrength_ml.config import BoneStrengthMLConfig, TrainTestSplitConfig
 
 
 @dataclass
@@ -18,6 +18,46 @@ class TrainTestData:
     y_train: pd.Series
     y_test: pd.Series
     output_name: str
+
+
+def prepare_train_test_split(
+    X: pd.DataFrame,
+    y: pd.DataFrame,
+    config: BoneStrengthMLConfig,
+    random_state: int = 42,
+) -> dict[str, TrainTestData]:
+    """Config-aware train/test split for all outputs.
+
+    Derives group labels when the configured split method is "grouped"
+    (using PC_* columns to identify patients), then delegates to
+    :func:`split_data_for_all_outputs`.
+
+    This is the single entry point that both the training pipeline and
+    verification tests should use to guarantee identical splits.
+
+    Args:
+        X: Feature DataFrame with input columns.
+        y: Target DataFrame with output columns.
+        config: Full project configuration.
+        random_state: Random seed for reproducibility.
+
+    Returns:
+        Dict mapping output_name -> TrainTestData.
+    """
+    split_config = config.model_development.train_test_split
+
+    groups = None
+    if split_config.method == "grouped":
+        pc_columns = [f.name for f in config.dataset.inputs if f.name.startswith("PC_")]
+        groups = X.groupby(pc_columns, sort=False).ngroup().values
+
+    return split_data_for_all_outputs(
+        X,
+        y,
+        split_config=split_config,
+        random_state=random_state,
+        groups=groups,
+    )
 
 
 def split_data_for_all_outputs(

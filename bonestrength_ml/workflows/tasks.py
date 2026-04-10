@@ -17,7 +17,7 @@ from bonestrength_ml.training.mlflow_utils import (
     log_training_result,
     setup_mlflow,
 )
-from bonestrength_ml.training.splitter import TrainTestData, split_data_for_all_outputs
+from bonestrength_ml.training.splitter import TrainTestData, prepare_train_test_split
 from bonestrength_ml.training.trainer import TrainingResult, train_single_model
 
 
@@ -59,20 +59,7 @@ def task_split_data(
     principal component columns (PC_*) so that all rows belonging to the
     same patient end up exclusively in either train or test.
     """
-    split_config = config.model_development.train_test_split
-
-    groups = None
-    if split_config.method == "grouped":
-        pc_columns = [f.name for f in config.dataset.inputs if f.name.startswith("PC_")]
-        groups = X.groupby(pc_columns, sort=False).ngroup().values
-
-    return split_data_for_all_outputs(
-        X,
-        y,
-        split_config=split_config,
-        random_state=random_state,
-        groups=groups,
-    )
+    return prepare_train_test_split(X, y, config, random_state)
 
 
 @task(name="setup_mlflow")

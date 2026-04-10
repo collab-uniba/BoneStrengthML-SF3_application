@@ -85,6 +85,7 @@ MetricType = Literal[
     "StandardDeviation",
     "RMSE",
     "PercentageRMSE",
+    "MaxStandardDeviation"
 ]
 
 
