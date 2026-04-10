@@ -3,8 +3,9 @@
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 from sklearn.base import BaseEstimator
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import GridSearchCV, GroupKFold, RandomizedSearchCV
 
 from bonestrength_ml.config import ModelConfig, OptimizationConfig
 from bonestrength_ml.training.metrics import evaluate_predictions, rmse_scorer
@@ -63,15 +64,17 @@ def train_single_model(
             param_grid=param_grid,
             opt_config=opt_config,
             random_state=random_state,
+            groups_train=data.groups_train,
         )
-        search.fit(data.X_train, data.y_train)
+        search.fit(data.X_train, data.y_train, groups=data.groups_train)
         best_estimator = search.best_estimator_
         best_params = search.best_params_
         cv_results = search.cv_results_
 
     # Evaluate on train and test
-    y_pred_train = best_estimator.predict(data.X_train)
-    y_pred_test = best_estimator.predict(data.X_test)
+    # ravel() ensures 1D output (PLSRegression returns 2D arrays)
+    y_pred_train = best_estimator.predict(data.X_train).ravel()
+    y_pred_test = best_estimator.predict(data.X_test).ravel()
 
     train_metrics = evaluate_predictions(data.y_train.values, y_pred_train)
     test_metrics = evaluate_predictions(data.y_test.values, y_pred_test)
@@ -93,12 +96,15 @@ def _create_search(
     param_grid: dict[str, list[Any]],
     opt_config: OptimizationConfig,
     random_state: int,
+    groups_train: np.ndarray | None = None,
 ) -> GridSearchCV | RandomizedSearchCV:
     """Create the appropriate search object based on config."""
+    cv = GroupKFold(n_splits=opt_config.cv) if groups_train is not None else opt_config.cv
+
     common_kwargs = {
         "estimator": base_model,
         "scoring": rmse_scorer,
-        "cv": opt_config.cv,
+        "cv": cv,
         "n_jobs": opt_config.n_jobs,
         "return_train_score": True,
         "verbose": 1,

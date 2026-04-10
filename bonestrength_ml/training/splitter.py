@@ -18,6 +18,7 @@ class TrainTestData:
     y_train: pd.Series
     y_test: pd.Series
     output_name: str
+    groups_train: np.ndarray | None = None
 
 
 def prepare_train_test_split(
@@ -105,6 +106,8 @@ def split_data_for_all_outputs(
             shuffle=True,
         )
 
+    groups_train = groups[train_idx] if groups is not None else None
+
     result: dict[str, TrainTestData] = {}
     for output_name in y.columns:
         result[output_name] = TrainTestData(
@@ -113,6 +116,7 @@ def split_data_for_all_outputs(
             y_train=y[output_name].iloc[train_idx].reset_index(drop=True),
             y_test=y[output_name].iloc[test_idx].reset_index(drop=True),
             output_name=output_name,
+            groups_train=groups_train,
         )
 
     return result
