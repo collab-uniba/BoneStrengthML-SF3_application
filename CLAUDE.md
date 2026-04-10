@@ -39,7 +39,7 @@ All behavior is controlled via `config/BoneStrengthML.yml`. The configuration de
 
 - Input/output field specifications with data types and validation ranges
 - Dataset metadata (file paths, format details)
-- ML model configurations with hyperparameter grids (RandomForest, XGBoost, SVM, Linear, MLP)
+- ML model configurations with hyperparameter grids (RandomForest, XGBoost, SVM, Linear, MLP, PLS, CatBoost, GaussianProcess)
 - Validation/verification thresholds
 
 ### Core Modules (`bonestrength_ml/`)
@@ -70,8 +70,8 @@ from bonestrength_ml.training import train_single_model, TrainTestData
 result = train_single_model(model_config, data, global_optimization)
 ```
 
-- `model_factory.py`: Maps config types to sklearn/xgboost classes
-- `trainer.py`: GridSearchCV/RandomizedSearchCV based on config
+- `model_factory.py`: Maps config types to sklearn/xgboost classes; includes `KERNEL_REGISTRY` for GPR kernel name resolution, `recreate_model()` for reconstructing models from MLflow params, and GPR-specific Pipeline wrapping (`StandardScaler` + `GaussianProcessRegressor`)
+- `trainer.py`: GridSearchCV/RandomizedSearchCV based on config; normalizes GPR best_params (strips pipeline prefix, maps kernel objects to names)
 - `mlflow_utils.py`: Experiment tracking with MLflow
 
 **`workflows/`**: Prefect orchestration:
@@ -81,7 +81,21 @@ from bonestrength_ml.workflows import train_all_outputs_flow
 results = train_all_outputs_flow()  # trains all models for all outputs
 ```
 
+**`verification/`**: Verification tests (convergence, smoothness, numerical error):
+
+- `convergence.py`: Uses `recreate_model()` from model_factory to reconstruct fresh models from MLflow params
+
 **`cli.py`**: Typer CLI entry point (`bsml` command)
+
+### GaussianProcessRegressor: Special-Case Architecture
+
+GPR requires a `Pipeline([StandardScaler, GaussianProcessRegressor])` wrapper and kernel objects as hyperparameters. Since kernel objects aren't YAML/MLflow-serializable, a **named kernel registry** (`KERNEL_REGISTRY` in `model_factory.py`) maps string names (e.g. `"rbf_short"`) to kernel objects. The flow:
+
+1. YAML config lists kernel names as strings → `get_param_grid()` resolves them to objects
+2. After GridSearchCV, `normalize_gpr_best_params()` reverse-maps kernel objects back to names
+3. MLflow stores clean string params → `recreate_model()` resolves names back to objects
+
+This is currently a GPR-specific special case with `if model_config.type == "GaussianProcessRegressor"` checks in `create_model()`, `get_param_grid()`, `trainer.py`, and `recreate_model()`. If a second model requires Pipeline wrapping or object-valued hyperparameters, this should be refactored into a trait-based/builder pattern.
 
 ## Domain Constraints
 

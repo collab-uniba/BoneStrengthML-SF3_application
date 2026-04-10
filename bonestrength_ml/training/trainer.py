@@ -9,7 +9,11 @@ from sklearn.model_selection import GridSearchCV, GroupKFold, RandomizedSearchCV
 
 from bonestrength_ml.config import ModelConfig, OptimizationConfig
 from bonestrength_ml.training.metrics import evaluate_predictions, rmse_scorer
-from bonestrength_ml.training.model_factory import create_model, get_param_grid
+from bonestrength_ml.training.model_factory import (
+    create_model,
+    get_param_grid,
+    normalize_gpr_best_params,
+)
 from bonestrength_ml.training.splitter import TrainTestData
 
 
@@ -69,6 +73,8 @@ def train_single_model(
         search.fit(data.X_train, data.y_train, groups=data.groups_train)
         best_estimator = search.best_estimator_
         best_params = search.best_params_
+        if model_config.type == "GaussianProcessRegressor":
+            best_params = normalize_gpr_best_params(best_params)
         cv_results = search.cv_results_
 
     # Evaluate on train and test
