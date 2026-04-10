@@ -9,7 +9,6 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
 # =============================================================================
 # Dataset Configuration Models
 # =============================================================================
@@ -166,7 +165,7 @@ class TrainTestSplitConfig(BaseModel):
     """Train/test split configuration."""
 
     train_fraction: float = Field(gt=0, lt=1)
-    method: Literal["random", "stratified"] = "random"
+    method: Literal["random", "grouped"] = "random"
 
 
 class PreprocessingConfig(BaseModel):

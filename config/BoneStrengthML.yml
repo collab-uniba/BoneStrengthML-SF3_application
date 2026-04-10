@@ -525,10 +525,10 @@ gate_thresholds:
         value: 1
     numerical_error:
       - field: maxStrain_11
-        metric: StandardDeviation
+        metric: MaxStandardDeviation
         value: 0.0000051
       - field: maxStrain_33
-        metric: StandardDeviation
+        metric: MaxStandardDeviation
         value: 0.0000073
 
 test_configurations:
@@ -546,7 +546,7 @@ test_configurations:
 model_development:
   train_test_split:
     train_fraction: 0.7
-    method: random
+    method: grouped
 
   preprocessing:
     normalization: false # Definire dizionario (su ogni campo di input? Può variare per i vari modelli testati?)
