@@ -501,7 +501,7 @@ dataset:
 
 gate_thresholds:
   validation:
-    - field: maxStrain_11 # Check che sia uno degli output?
+    - field: maxStrain_11
       metric: MaximumAbsoluteError # Oppure InfinityNorm, qui dobbiamo decidere un dizionario di metriche ammissibili (RMSE, PercentageRMSE, ecc.)
       value: 0.000051
     - field: maxStrain_33
@@ -531,7 +531,6 @@ verification:
       parameters:
         sample_fraction: 0.4
         perturbation_scaled_magnitude: 0.001
-    # Future V&V 40 tests slot in here, e.g.:
     # - type: numerical_error
     #   thresholds:
     #     - field: maxStrain_11
