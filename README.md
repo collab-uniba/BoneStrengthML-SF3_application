@@ -62,11 +62,17 @@ Train a specific model for a specific output:
 bsml train --output maxStrain_11 --model RandomForestRegressor
 ```
 
-Register best models in MLflow Model Registry:
+By default, `bsml train` runs verification (convergence + smoothness) on the
+best model per output and **automatically registers** any model that passes
+all configured verification tests in the MLflow Model Registry. To skip
+verification (and therefore registration) for fast iteration:
 
 ```bash
-bsml train --register
+bsml train --skip-verification
 ```
+
+The specific-model debug path (`bsml train --output X --model Y`) trains
+only — no verification, no registration.
 
 ### Viewing Results
 

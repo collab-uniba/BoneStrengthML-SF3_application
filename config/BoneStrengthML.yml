@@ -508,40 +508,44 @@ gate_thresholds:
       metric: MaximumAbsoluteError
       value: 0.000073
 
-  verification:
-    convergence:
-      - field: maxStrain_11
-        metric: MeanRelativeError
-        value: 0.05
-      - field: maxStrain_33
-        metric: MeanRelativeError
-        value: 0.05
-    smoothness:
-      - field: maxStrain_11
-        metric: MaximumRelativeErrorRatio
-        value: 1
-      - field: maxStrain_11
-        metric: MaximumRelativeErrorRatio
-        value: 1
-    numerical_error:
-      - field: maxStrain_11
-        metric: MaxStandardDeviation
-        value: 0.0000051
-      - field: maxStrain_33
-        metric: MaxStandardDeviation
-        value: 0.0000073
-
-test_configurations:
-  verification:
-    convergence:
-      n_rows: [100, 250, 500, 1000] # Forse anche questo ha senso farlo relativo invece che assoluto (o poter scegliere)?
-    existence:
-      samples: 1000
-    smoothness:
-      sample_fraction: 0.4
-      perturbation_scaled_magnitude: 0.001
-    numerical_error:
-      sets: 10
+verification:
+  test_list:
+    - type: convergence
+      thresholds:
+        - field: maxStrain_11
+          metric: MeanRelativeError
+          value: 0.05
+        - field: maxStrain_33
+          metric: MeanRelativeError
+          value: 0.05
+      parameters:
+        n_rows: [100, 250, 500, 1000]
+    - type: smoothness
+      thresholds:
+        - field: maxStrain_11
+          metric: MaximumRelativeErrorRatio
+          value: 1
+        - field: maxStrain_33
+          metric: MaximumRelativeErrorRatio
+          value: 1
+      parameters:
+        sample_fraction: 0.4
+        perturbation_scaled_magnitude: 0.001
+    # Future V&V 40 tests slot in here, e.g.:
+    # - type: numerical_error
+    #   thresholds:
+    #     - field: maxStrain_11
+    #       metric: MaxStandardDeviation
+    #       value: 0.0000051
+    #     - field: maxStrain_33
+    #       metric: MaxStandardDeviation
+    #       value: 0.0000073
+    #   parameters:
+    #     sets: 10
+    # - type: existence
+    #   thresholds: []
+    #   parameters:
+    #     samples: 1000
 
 model_development:
   train_test_split:

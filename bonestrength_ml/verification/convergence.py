@@ -7,6 +7,9 @@ import pandas as pd
 
 from bonestrength_ml.training.metrics import mean_relative_error
 from bonestrength_ml.training.model_factory import recreate_model
+from bonestrength_ml.verification.base import TestResult, VerificationContext
+from bonestrength_ml.verification.latin_hypercube import generate_lhs_samples
+from bonestrength_ml.verification.registry import register
 
 
 @dataclass
@@ -106,3 +109,78 @@ def run_convergence_test(
         min_k=min_k,
         converged=converged,
     )
+
+
+def convergence_check(ctx: VerificationContext) -> TestResult:
+    """Adapter that runs ``run_convergence_test`` from a ``VerificationContext``.
+
+    Uses LHS-sampled evaluation points; the winning model's predictions on
+    those points are the reference predictions to which subset-trained models
+    are compared.
+    """
+    from bonestrength_ml.training.splitter import prepare_train_test_split
+
+    output_name = ctx.result.output_name
+
+    threshold = next(
+        (t.value for t in ctx.entry.thresholds if t.field == output_name),
+        None,
+    )
+    if threshold is None:
+        raise ValueError(
+            f"No convergence threshold configured for output '{output_name}'"
+        )
+
+    n_rows = ctx.entry.parameters.get("n_rows")
+    if not n_rows:
+        raise ValueError("convergence test requires 'n_rows' in parameters")
+
+    split = prepare_train_test_split(ctx.X, ctx.y, ctx.config, ctx.random_state)
+    data = split[output_name]
+
+    lhs_samples = ctx.entry.parameters.get("lhs_samples", 1000)
+    X_eval = generate_lhs_samples(
+        inputs=ctx.config.dataset.inputs,
+        sample_size=lhs_samples,
+        random_state=ctx.random_state,
+    )
+    ref_predictions = ctx.result.best_estimator.predict(X_eval)
+
+    result = run_convergence_test(
+        X_train=data.X_train,
+        y_train=data.y_train,
+        X_eval=X_eval,
+        ref_predictions=ref_predictions,
+        model_type=ctx.result.model_type,
+        best_params=ctx.result.best_params,
+        n_rows=list(n_rows),
+        threshold=float(threshold),
+        output_name=output_name,
+        random_state=ctx.random_state,
+    )
+
+    metrics: dict[str, float] = {
+        "max_error": float(max(result.errors)) if result.errors else float("nan"),
+        "final_error": float(result.errors[-1]) if result.errors else float("nan"),
+    }
+    if result.min_k is not None:
+        metrics["min_k"] = float(result.min_k)
+
+    return TestResult(
+        name="convergence",
+        passed=result.converged,
+        metrics=metrics,
+        params={
+            "threshold": float(threshold),
+            "n_rows": ",".join(str(k) for k in n_rows),
+            "lhs_samples": lhs_samples,
+        },
+        details={
+            "errors": [float(e) for e in result.errors],
+            "n_rows_tested": list(result.n_rows_tested),
+            "min_k": result.min_k,
+        },
+    )
+
+
+register("convergence", convergence_check)

@@ -1,5 +1,7 @@
 """MLflow integration utilities for experiment tracking."""
 
+import json
+import math
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +14,7 @@ from sklearn.base import BaseEstimator
 
 from bonestrength_ml.config import BoneStrengthMLConfig
 from bonestrength_ml.training.trainer import TrainingResult
+from bonestrength_ml.verification.base import VerificationReport
 
 
 @dataclass
@@ -58,19 +61,11 @@ def log_training_result(
     config: BoneStrengthMLConfig,
     X_sample: pd.DataFrame,
     run_name: str | None = None,
-    register_model: bool = False,
 ) -> str:
-    """Log a training result to MLflow.
+    """Log a training result to MLflow as a new run.
 
-    Args:
-        result: TrainingResult from training.
-        config: Full configuration used.
-        X_sample: Sample input data for signature inference.
-        run_name: Optional run name.
-        register_model: Whether to register model in Model Registry.
-
-    Returns:
-        MLflow run ID.
+    Returns the new run's id. Registration is a separate step (see
+    ``register_run_model``) gated on verification outcomes.
     """
     run_name = run_name or f"{result.model_label}_{result.output_name}"
 
@@ -103,7 +98,7 @@ def log_training_result(
         # Log model with signature
         signature = infer_signature(X_sample, result.best_estimator.predict(X_sample))
 
-        model_info = mlflow.sklearn.log_model(
+        mlflow.sklearn.log_model(
             result.best_estimator,
             artifact_path="model",
             signature=signature,
@@ -118,12 +113,51 @@ def log_training_result(
                 cv_df.to_csv(cv_path, index=False)
                 mlflow.log_artifact(str(cv_path), artifact_path="cv_results")
 
-        # Register model if requested
-        if register_model:
-            model_name = f"BoneStrengthML_{result.output_name}_{result.model_label}"
-            mlflow.register_model(model_info.model_uri, model_name)
-
         return run.info.run_id
+
+
+def register_run_model(run_id: str, model_name: str) -> str:
+    """Register the ``model`` artifact of an existing run in the MLflow Model Registry.
+
+    Returns the registered model URI for downstream logging.
+    """
+    model_uri = f"runs:/{run_id}/model"
+    mlflow.register_model(model_uri, model_name)
+    return model_uri
+
+
+def log_verification_results(run_id: str, report: VerificationReport) -> None:
+    """Attach a verification report to an existing training run.
+
+    Resumes the run by ``run_id`` and writes:
+      - metrics ``verification.{test}.{key}`` (one per test metric)
+      - params  ``verification.{test}.{key}`` (one per test param)
+      - tags    ``verification.{test}`` = "pass"/"fail" and ``verification.status``
+      - artifact ``verification/report.json`` (full structured report)
+
+    The function iterates ``report.tests`` generically — adding new check types
+    requires no changes here.
+    """
+    with mlflow.start_run(run_id=run_id):
+        for test in report.tests:
+            for k, v in test.metrics.items():
+                if isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v)):
+                    mlflow.log_metric(f"verification.{test.name}.{k}", float(v))
+            for k, v in test.params.items():
+                mlflow.log_param(f"verification.{test.name}.{k}", v)
+            mlflow.set_tag(
+                f"verification.{test.name}", "pass" if test.passed else "fail"
+            )
+
+        mlflow.set_tag(
+            "verification.status", "passed" if report.all_passed else "failed"
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report_path = Path(tmpdir) / "report.json"
+            with report_path.open("w") as f:
+                json.dump(report.to_dict(), f, indent=2, default=str)
+            mlflow.log_artifact(str(report_path), artifact_path="verification")
 
 
 def log_experiment_summary(

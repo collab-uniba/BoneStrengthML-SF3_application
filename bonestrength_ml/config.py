@@ -4,7 +4,7 @@ This module defines Pydantic models for validating the YAML configuration file.
 """
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -97,64 +97,34 @@ class ThresholdCriterion(BaseModel):
     value: float
 
 
-class VerificationThresholds(BaseModel):
-    """Verification gate thresholds."""
-
-    convergence: list[ThresholdCriterion] = Field(default_factory=list)
-    smoothness: list[ThresholdCriterion] = Field(default_factory=list)
-    numerical_error: list[ThresholdCriterion] = Field(default_factory=list)
-
-
 class GateThresholds(BaseModel):
-    """Gate thresholds for validation and verification."""
+    """Gate thresholds for validation."""
 
     validation: list[ThresholdCriterion]
-    verification: VerificationThresholds
 
 
 # =============================================================================
-# Test Configuration Models
+# Verification Configuration Models
 # =============================================================================
 
 
-class ConvergenceTestConfig(BaseModel):
-    """Convergence test configuration."""
+class VerificationTestEntry(BaseModel):
+    """A single verification test, self-contained with thresholds and parameters.
 
-    n_rows: list[int]
+    Mirrors the shape of ``ModelConfig``: each entry's ``type`` is resolved
+    against the verification check registry, and ``parameters`` is an
+    open-ended dict so future tests can add new fields without schema changes.
+    """
 
-
-class ExistenceTestConfig(BaseModel):
-    """Existence test configuration."""
-
-    samples: int
-
-
-class SmoothnessTestConfig(BaseModel):
-    """Smoothness test configuration."""
-
-    sample_fraction: float = Field(gt=0, le=1)
-    perturbation_scaled_magnitude: float
+    type: str
+    thresholds: list[ThresholdCriterion] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
-class NumericalErrorTestConfig(BaseModel):
-    """Numerical error test configuration."""
+class VerificationConfig(BaseModel):
+    """Verification configuration: the list of tests to run after training."""
 
-    sets: int
-
-
-class VerificationTestConfig(BaseModel):
-    """Verification test configurations."""
-
-    convergence: ConvergenceTestConfig
-    existence: ExistenceTestConfig
-    smoothness: SmoothnessTestConfig
-    numerical_error: NumericalErrorTestConfig
-
-
-class TestConfigurations(BaseModel):
-    """Test configurations."""
-
-    verification: VerificationTestConfig
+    test_list: list[VerificationTestEntry] = Field(default_factory=list)
 
 
 # =============================================================================
@@ -230,7 +200,7 @@ class BoneStrengthMLConfig(BaseModel):
 
     dataset: DatasetConfig
     gate_thresholds: GateThresholds
-    test_configurations: TestConfigurations
+    verification: VerificationConfig = Field(default_factory=VerificationConfig)
     model_development: ModelDevelopmentConfig
 
     @classmethod
