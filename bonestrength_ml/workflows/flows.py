@@ -7,18 +7,13 @@ from prefect import flow
 
 from bonestrength_ml.config import BoneStrengthMLConfig
 from bonestrength_ml.training.trainer import TrainingResult
-from bonestrength_ml.workflows.tasks import (
-    task_load_config,
-    task_load_data,
-    task_log_result,
-    task_log_summary,
-    task_prepare_features_targets,
-    task_register_winner,
-    task_setup_mlflow,
-    task_split_data,
-    task_train_model,
-    task_verify_model,
-)
+from bonestrength_ml.workflows.tasks import (task_load_config, task_load_data,
+                                             task_log_result, task_log_summary,
+                                             task_prepare_features_targets,
+                                             task_register_winner,
+                                             task_setup_mlflow,
+                                             task_split_data, task_train_model,
+                                             task_verify_model)
 
 
 def _verify_and_register_winners(
@@ -163,6 +158,8 @@ def train_all_outputs_flow(
             f"R2={result.test_metrics['r2']:.4f}"
         )
 
+    task_log_summary(flat_results, config)
+
     if not skip_verification:
         winners: dict[str, tuple[TrainingResult, str]] = {}
         for output_name, output_results in all_results.items():
@@ -170,8 +167,6 @@ def train_all_outputs_flow(
             print(f"\n  Best model for {output_name}: {best_result.model_label}")
             winners[output_name] = (best_result, run_ids[id(best_result)])
         _verify_and_register_winners(winners, X, y, config, random_state)
-
-    task_log_summary(flat_results, config)
 
     return all_results
 
