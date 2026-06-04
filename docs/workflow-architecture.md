@@ -40,11 +40,10 @@ flowchart TD
       task_prepare_features_targets
       task_split_data]
 
-    model_training@{ shape: procs, label: "**Train all models**<br>task_train_model<br><br>*parallel execution for each model and output*" }
+    model_training@{ shape: procs, label: "**Train all models**<br>task_train_model<br><br>*parallel execution for each model and output;<br>each result is logged to MLflow as soon as it is trained*" }
 
-    log_results[**Log training results
+    log_summary[**Log experiment summary
             to MLflow**
-      task_log_result
       task_log_summary]
 
     verify_best_models@{ shape: procs, label: "**Verify best models**<br>task_verify_model<br><br>*parallel execution for each best model*" }
@@ -56,11 +55,13 @@ flowchart TD
     subgraph training_subflow [Training subflow]
         direction TB
         data_loading --> model_training
-        model_training --> log_results
+        model_training --> log_summary
     end
     subgraph verification_subflow [Verification subflow]
         direction TB
-        log_results --> verify_best_models
+        log_summary --> verify_best_models
         verify_best_models --> register_winners
     end
 ```
+
+Each `task_train_model` logs its own MLflow run (parameters, metrics, and the fitted model) as soon as that model finishes training, so runs become observable in parallel rather than only after the whole batch completes. Once every model has been trained, `task_log_summary` adds a single run comparing them all.

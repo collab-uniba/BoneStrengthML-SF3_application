@@ -8,7 +8,7 @@ from prefect import flow
 from bonestrength_ml.config import BoneStrengthMLConfig
 from bonestrength_ml.training.trainer import TrainingResult
 from bonestrength_ml.workflows.tasks import (task_load_config, task_load_data,
-                                             task_log_result, task_log_summary,
+                                             task_log_summary,
                                              task_prepare_features_targets,
                                              task_register_winner,
                                              task_setup_mlflow,
@@ -74,30 +74,27 @@ def train_single_output_flow(
     split_data = task_split_data(X, y, config, random_state)
 
     data = split_data[output_name]
-    X_sample = X.iloc[:100]
 
-    futures = []
-    for model_config in config.model_development.model_list:
-        future = task_train_model.submit(
+    futures = [
+        task_train_model.submit(
             model_config=model_config,
             data=data,
             config=config,
             random_state=random_state,
         )
-        futures.append((model_config, future))
+        for model_config in config.model_development.model_list
+    ]
 
-    results: list[TrainingResult] = []
-    run_ids: dict[int, str] = {}
-    for _, future in futures:
-        result = future.result()
-        results.append(result)
-        run_id = task_log_result(result=result, config=config, X_sample=X_sample)
-        run_ids[id(result)] = run_id
+    # Each (result, run_id) is already logged to MLflow by the training task.
+    results_with_runs = [future.result() for future in futures]
+    results = [result for result, _ in results_with_runs]
 
     if not skip_verification:
-        best_result = min(results, key=lambda r: r.test_metrics["rmse"])
+        best_result, best_run_id = min(
+            results_with_runs, key=lambda rr: rr[0].test_metrics["rmse"]
+        )
         print(f"\n  Best model for {output_name}: {best_result.model_label}")
-        winners = {output_name: (best_result, run_ids[id(best_result)])}
+        winners = {output_name: (best_result, best_run_id)}
         _verify_and_register_winners(winners, X, y, config, random_state)
 
     return results
@@ -119,8 +116,6 @@ def train_all_outputs_flow(
     X, y = task_prepare_features_targets(df, config)
     all_split_data = task_split_data(X, y, config, random_state)
 
-    X_sample = X.iloc[:100]
-
     print(
         f"\nSubmitting {len(config.model_development.model_list)} models x "
         f"{len(all_split_data)} outputs for parallel training..."
@@ -138,37 +133,39 @@ def train_all_outputs_flow(
                 (output_name, model_config.label or model_config.type, future)
             )
 
-    all_results: dict[str, list[TrainingResult]] = {
+    # Each training task logs its own (result, run_id) to MLflow as soon as it
+    # finishes; here we just collect the results for the summary and verification.
+    results_with_runs: dict[str, list[tuple[TrainingResult, str]]] = {
         name: [] for name in all_split_data.keys()
     }
-    flat_results: list[TrainingResult] = []
-    run_ids: dict[int, str] = {}
-
     for output_name, model_label, future in futures:
-        result = future.result()
-        all_results[output_name].append(result)
-        flat_results.append(result)
-
-        run_id = task_log_result(result=result, config=config, X_sample=X_sample)
-        run_ids[id(result)] = run_id
-
+        result, run_id = future.result()
+        results_with_runs[output_name].append((result, run_id))
         print(
             f"  {model_label} -> {output_name}: "
             f"RMSE={result.test_metrics['rmse']:.6f}, "
             f"R2={result.test_metrics['r2']:.4f}"
         )
 
+    flat_results = [
+        result for pairs in results_with_runs.values() for result, _ in pairs
+    ]
     task_log_summary(flat_results, config)
 
     if not skip_verification:
         winners: dict[str, tuple[TrainingResult, str]] = {}
-        for output_name, output_results in all_results.items():
-            best_result = min(output_results, key=lambda r: r.test_metrics["rmse"])
+        for output_name, pairs in results_with_runs.items():
+            best_result, best_run_id = min(
+                pairs, key=lambda rr: rr[0].test_metrics["rmse"]
+            )
             print(f"\n  Best model for {output_name}: {best_result.model_label}")
-            winners[output_name] = (best_result, run_ids[id(best_result)])
+            winners[output_name] = (best_result, best_run_id)
         _verify_and_register_winners(winners, X, y, config, random_state)
 
-    return all_results
+    return {
+        name: [result for result, _ in pairs]
+        for name, pairs in results_with_runs.items()
+    }
 
 
 @flow(name="train_specific_model")
@@ -202,13 +199,11 @@ def train_specific_model_flow(
     split_data = task_split_data(X, y, config, random_state)
     data = split_data[output_name]
 
-    result = task_train_model(
+    result, _run_id = task_train_model(
         model_config=model_config,
         data=data,
         config=config,
         random_state=random_state,
     )
-
-    task_log_result(result=result, config=config, X_sample=X.iloc[:100])
 
     return result

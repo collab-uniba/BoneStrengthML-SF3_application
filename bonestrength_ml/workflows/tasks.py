@@ -96,28 +96,25 @@ def task_train_model(
     data: TrainTestData,
     config: BoneStrengthMLConfig,
     random_state: int = 42,
-) -> TrainingResult:
-    """Train a single model on single output."""
-    return train_single_model(
+) -> tuple[TrainingResult, str]:
+    """Train a single model and log it to MLflow immediately.
+
+    Logging happens here (rather than in a later, sequential step) so each
+    model's run appears in MLflow as soon as that model finishes training,
+    in parallel with the others. Returns ``(result, run_id)``.
+    """
+    result = train_single_model(
         model_config=model_config,
         data=data,
         global_optimization=config.model_development.optimization,
         random_state=random_state,
     )
-
-
-@task(name="log_result_to_mlflow")
-def task_log_result(
-    result: TrainingResult,
-    config: BoneStrengthMLConfig,
-    X_sample: pd.DataFrame,
-) -> str:
-    """Log training result to MLflow; returns the created run_id."""
-    return log_training_result(
+    run_id = log_training_result(
         result=result,
         config=config,
-        X_sample=X_sample,
+        X_sample=data.X_train.iloc[:100],
     )
+    return result, run_id
 
 
 @task(name="log_experiment_summary")
