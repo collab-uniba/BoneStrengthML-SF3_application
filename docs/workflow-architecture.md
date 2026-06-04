@@ -31,19 +31,19 @@ Let's take a closer look at the `train_all_outputs_flow` workflow:
 
 ```mermaid
 flowchart TD
-    flow_setup["**Setup the workflow**"
+    flow_setup[<b>Setup the workflow</b>
       task_load_config
       task_setup_mlflow]
 
-    data_loading["**Load and split data**"
+    data_loading[<b>Load and split data</b>
       task_load_data
       task_prepare_features_targets
       task_split_data]
 
     model_training@{ shape: procs, label: "**Train all models**<br>task_train_model<br><br>*parallel execution for each model and output;<br>each result is logged to MLflow as soon as it is trained*" }
 
-    log_summary["**Log experiment summary
-            to MLflow**"
+    log_summary[<b>Log experiment summary
+            to MLflow</b>
       task_log_summary]
 
     verify_best_models@{ shape: procs, label: "**Verify best models**<br>task_verify_model<br><br>*parallel execution for each best model*" }
