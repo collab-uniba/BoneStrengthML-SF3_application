@@ -9,10 +9,10 @@ from bonestrength_ml.config import BoneStrengthMLConfig
 from bonestrength_ml.training.trainer import TrainingResult
 from bonestrength_ml.workflows.tasks import (task_load_config, task_load_data,
                                              task_log_summary,
-                                             task_prepare_features_targets,
+                                             task_prepare_and_split_data,
                                              task_register_winner,
                                              task_setup_mlflow,
-                                             task_split_data, task_train_model,
+                                             task_train_model,
                                              task_verify_model)
 
 
@@ -70,8 +70,7 @@ def train_single_output_flow(
     task_setup_mlflow(mlflow_tracking_uri, experiment_name)
 
     df = task_load_data(config)
-    X, y = task_prepare_features_targets(df, config)
-    split_data = task_split_data(X, y, config, random_state)
+    X, y, split_data = task_prepare_and_split_data(df, config, random_state)
 
     data = split_data[output_name]
 
@@ -113,8 +112,7 @@ def train_all_outputs_flow(
     task_setup_mlflow(mlflow_tracking_uri, experiment_name)
 
     df = task_load_data(config)
-    X, y = task_prepare_features_targets(df, config)
-    all_split_data = task_split_data(X, y, config, random_state)
+    X, y, all_split_data = task_prepare_and_split_data(df, config, random_state)
 
     print(
         f"\nSubmitting {len(config.model_building.model_list)} models x "
@@ -195,8 +193,7 @@ def train_specific_model_flow(
         raise ValueError(f"Model type '{model_type}' not found in config")
 
     df = task_load_data(config)
-    X, y = task_prepare_features_targets(df, config)
-    split_data = task_split_data(X, y, config, random_state)
+    _X, _y, split_data = task_prepare_and_split_data(df, config, random_state)
     data = split_data[output_name]
 
     result, _run_id = task_train_model(

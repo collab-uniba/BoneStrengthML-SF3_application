@@ -39,31 +39,27 @@ def task_load_data(config: BoneStrengthMLConfig) -> pd.DataFrame:
     return load_and_validate_data(config=config)
 
 
-@task(name="prepare_features_targets")
-def task_prepare_features_targets(
+@task(name="prepare_and_split_data")
+def task_prepare_and_split_data(
     df: pd.DataFrame,
     config: BoneStrengthMLConfig,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Split DataFrame into features (X) and targets (y)."""
+    random_state: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, TrainTestData]]:
+    """Project the dataframe into features (X) / targets (y) and build the
+    per-output train/test splits.
+
+    Returns ``(X, y, splits)``: the full feature/target frames (used as-is by
+    downstream verification) plus the per-output ``TrainTestData`` splits used
+    for training.
+
+    When the split method is "grouped", patient group labels are derived from
+    the principal component columns (PC_*) so that all rows for a patient land
+    exclusively in either train or test.
+    """
     X = df[get_input_columns(config)]
     y = df[get_output_columns(config)]
-    return X, y
-
-
-@task(name="split_data")
-def task_split_data(
-    X: pd.DataFrame,
-    y: pd.DataFrame,
-    config: BoneStrengthMLConfig,
-    random_state: int = 42,
-) -> dict[str, TrainTestData]:
-    """Split data for all outputs.
-
-    When split method is "grouped", derives patient group labels from the
-    principal component columns (PC_*) so that all rows belonging to the
-    same patient end up exclusively in either train or test.
-    """
-    return prepare_train_test_split(X, y, config, random_state)
+    splits = prepare_train_test_split(X, y, config, random_state)
+    return X, y, splits
 
 
 @task(name="setup_mlflow")
