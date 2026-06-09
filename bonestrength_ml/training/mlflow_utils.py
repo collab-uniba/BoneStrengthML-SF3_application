@@ -45,10 +45,7 @@ def setup_mlflow(
     # Create or get experiment
     experiment = mlflow.get_experiment_by_name(experiment_name)
     if experiment is None:
-        experiment_id = mlflow.create_experiment(
-            experiment_name,
-            tags={"project": "BoneStrengthML", "type": "surrogate_model"},
-        )
+        experiment_id = mlflow.create_experiment(experiment_name)
     else:
         experiment_id = experiment.experiment_id
 
