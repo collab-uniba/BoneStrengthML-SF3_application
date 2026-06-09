@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 from prefect import flow
+from prefect.futures import PrefectFuture
 
 from bonestrength_ml.config import BoneStrengthMLConfig
 from bonestrength_ml.training.trainer import TrainingResult
@@ -118,7 +119,7 @@ def train_all_outputs_flow(
         f"\nSubmitting {len(config.model_building.model_list)} models x "
         f"{len(all_split_data)} outputs for parallel training..."
     )
-    futures: list[tuple[str, str, object]] = []
+    futures: list[tuple[str, str, PrefectFuture]] = []
     for output_name, data in all_split_data.items():
         for model_config in config.model_building.model_list:
             future = task_train_model.submit(
