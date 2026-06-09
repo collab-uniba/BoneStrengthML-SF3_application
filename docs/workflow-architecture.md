@@ -61,7 +61,16 @@ flowchart TD
 
 Each `task_train_model` logs its own MLflow run (parameters, metrics, and the fitted model) as soon as that model finishes training, so runs become observable in parallel rather than only after the whole batch completes. Once every model has been trained, `task_log_summary` adds a single run comparing them all.
 
+## CLI
+
+The workflows are executed through a CLI defined in `bonestrength_ml/cli.py` using **Typer**. The **Rich** library is used to improve the CLI output.
+
 ## Configuration
 
 Workflows in this project are configuration-driven.
 The configuration is stored in `config/BoneStrengthML.yml`. A single configuration file drives all three workflows, specifying the dataset, the list of models to train, the optimization settings, and the verification tests and gate thresholds.
+The configuration file is loaded and validated using **Pydantic** at the beginning of each workflow.
+
+## Data loading and validation
+
+Data is loaded from csv and validated using **Pandera**.
