@@ -106,7 +106,7 @@ def task_train_model(
     result = train_single_model(
         model_config=model_config,
         data=data,
-        global_optimization=config.model_development.optimization,
+        global_optimization=config.model_building.optimization,
         random_state=random_state,
     )
     run_id = log_training_result(

@@ -45,7 +45,7 @@ def prepare_train_test_split(
     Returns:
         Dict mapping output_name -> TrainTestData.
     """
-    split_config = config.model_development.train_test_split
+    split_config = config.model_building.train_test_split
 
     groups = None
     if split_config.method == "grouped":

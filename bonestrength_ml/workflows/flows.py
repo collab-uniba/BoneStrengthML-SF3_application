@@ -82,7 +82,7 @@ def train_single_output_flow(
             config=config,
             random_state=random_state,
         )
-        for model_config in config.model_development.model_list
+        for model_config in config.model_building.model_list
     ]
 
     # Each (result, run_id) is already logged to MLflow by the training task.
@@ -117,12 +117,12 @@ def train_all_outputs_flow(
     all_split_data = task_split_data(X, y, config, random_state)
 
     print(
-        f"\nSubmitting {len(config.model_development.model_list)} models x "
+        f"\nSubmitting {len(config.model_building.model_list)} models x "
         f"{len(all_split_data)} outputs for parallel training..."
     )
     futures: list[tuple[str, str, object]] = []
     for output_name, data in all_split_data.items():
-        for model_config in config.model_development.model_list:
+        for model_config in config.model_building.model_list:
             future = task_train_model.submit(
                 model_config=model_config,
                 data=data,
@@ -186,7 +186,7 @@ def train_specific_model_flow(
     task_setup_mlflow(mlflow_tracking_uri, experiment_name)
 
     model_config = None
-    for mc in config.model_development.model_list:
+    for mc in config.model_building.model_list:
         if mc.type == model_type or mc.label == model_type:
             model_config = mc
             break

@@ -168,8 +168,8 @@ def list_models(
     table.add_column("Optimization", style="yellow")
     table.add_column("Hyperparameters (search)", style="dim")
 
-    for model_cfg in cfg.model_development.model_list:
-        opt = model_cfg.optimization or cfg.model_development.optimization
+    for model_cfg in cfg.model_building.model_list:
+        opt = model_cfg.optimization or cfg.model_building.optimization
         search_params = [
             k for k, v in model_cfg.hyperparameters.items() if isinstance(v, list)
         ]

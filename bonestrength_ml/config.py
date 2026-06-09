@@ -128,7 +128,7 @@ class VerificationConfig(BaseModel):
 
 
 # =============================================================================
-# Model Development Configuration Models
+# Model Building Configuration Models
 # =============================================================================
 
 
@@ -181,8 +181,8 @@ class ModelConfig(BaseModel):
         return self
 
 
-class ModelDevelopmentConfig(BaseModel):
-    """Model development configuration."""
+class ModelBuildingConfig(BaseModel):
+    """Model building configuration."""
 
     train_test_split: TrainTestSplitConfig
     preprocessing: PreprocessingConfig
@@ -201,7 +201,7 @@ class BoneStrengthMLConfig(BaseModel):
     dataset: DatasetConfig
     gate_thresholds: GateThresholds
     verification: VerificationConfig = Field(default_factory=VerificationConfig)
-    model_development: ModelDevelopmentConfig
+    model_building: ModelBuildingConfig
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "BoneStrengthMLConfig":

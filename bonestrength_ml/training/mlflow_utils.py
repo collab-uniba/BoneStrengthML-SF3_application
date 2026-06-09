@@ -71,13 +71,13 @@ def log_training_result(
 
     with mlflow.start_run(run_name=run_name) as run:
         # Log parameters
-        opt_config = config.model_development.optimization
+        opt_config = config.model_building.optimization
         params = {
             "model_type": result.model_type,
             "model_label": result.model_label,
             "output_name": result.output_name,
-            "train_fraction": config.model_development.train_test_split.train_fraction,
-            "split_method": config.model_development.train_test_split.method,
+            "train_fraction": config.model_building.train_test_split.train_fraction,
+            "split_method": config.model_building.train_test_split.method,
             "cv_folds": opt_config.cv,
             "optimization_method": opt_config.optimization_method,
         }

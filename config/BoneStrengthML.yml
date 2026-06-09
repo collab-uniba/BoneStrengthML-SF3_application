@@ -546,7 +546,7 @@ verification:
     #   parameters:
     #     samples: 1000
 
-model_development:
+model_building:
   train_test_split:
     train_fraction: 0.7
     method: grouped
