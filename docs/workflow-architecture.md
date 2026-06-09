@@ -13,11 +13,6 @@ architecture-beta
   prefect:R -- L:mlflow
 ```
 
-## Configuration
-
-Prefect workflows are configuration-driven.
-
-The configuration is stored in YAML files under the `config` directory (see `config/BoneStrengthML.yml`). A single configuration file drives all three workflows, specifying the dataset, the list of models to train, the optimization settings, and the verification tests and gate thresholds.
 
 ## Prefect workflows
 
@@ -27,7 +22,7 @@ Three Prefect workflows are defined (see `bonestrength_ml/workflows/flows.py`):
 - `train_single_output_flow`: trains all models specified in the configuration file for a single output variable (either `maxStrain_11` or `maxStrain_33`);
 - `train_specific_model_flow`: trains a specific model for a specific output variable.
 
-Let's take a closer look at the `train_all_outputs_flow` workflow:
+Let's take a closer look at the full workflow `train_all_outputs_flow`, which trains all models for both output variables. The other two workflows are simplified versions of this one.
 
 ```mermaid
 flowchart TD
@@ -65,3 +60,8 @@ flowchart TD
 ```
 
 Each `task_train_model` logs its own MLflow run (parameters, metrics, and the fitted model) as soon as that model finishes training, so runs become observable in parallel rather than only after the whole batch completes. Once every model has been trained, `task_log_summary` adds a single run comparing them all.
+
+## Configuration
+
+Workflows in this project are configuration-driven.
+The configuration is stored in `config/BoneStrengthML.yml`. A single configuration file drives all three workflows, specifying the dataset, the list of models to train, the optimization settings, and the verification tests and gate thresholds.
