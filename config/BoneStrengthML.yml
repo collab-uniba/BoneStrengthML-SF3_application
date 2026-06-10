@@ -560,7 +560,7 @@ model_building:
     optimization_method: GridSearch # Uguale per tutti i modelli?
     n_jobs: 1
     cv: 5
-    scoring: None
+    scoring: null
 
   model_list:
     - type: RandomForestRegressor # Definire dizionario
