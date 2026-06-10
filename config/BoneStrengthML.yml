@@ -497,7 +497,7 @@ dataset:
       range: [0, 0.03]
       units: adimensional
       missing_values_allowed: false
-  duplicate_rows: false
+  duplicate_rows: true
 
 gate_thresholds:
   validation:

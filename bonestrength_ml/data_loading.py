@@ -80,10 +80,12 @@ def build_schema_from_config(dataset_config: DatasetConfig) -> DataFrameSchema:
         columns[field.name] = _build_column_schema(field)
 
     # Build schema with strict=True to catch unexpected columns
+    # Pandera skips the uniqueness check when `unique` is empty/None, so to
+    # reject duplicate rows all columns must be listed as jointly unique.
     return DataFrameSchema(
         columns=columns,
         strict=True,  # Fail if there are columns not in schema
-        unique=None if dataset_config.duplicate_rows else [],  # Check for duplicates if not allowed
+        unique=None if dataset_config.duplicate_rows else list(columns),
         coerce=True,
     )
 
