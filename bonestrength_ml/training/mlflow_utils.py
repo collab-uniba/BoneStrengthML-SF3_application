@@ -97,7 +97,7 @@ def log_training_result(
 
         mlflow.sklearn.log_model(
             result.best_estimator,
-            artifact_path="model",
+            name="model",
             signature=signature,
             input_example=X_sample.iloc[:5],
         )

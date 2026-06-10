@@ -304,6 +304,32 @@ def _extract_fixed_params(hyperparameters: dict[str, Any]) -> dict[str, Any]:
 
 
 def _supports_param(model_class: type, param_name: str) -> bool:
-    """Check if model class constructor accepts a given parameter."""
+    """Check if model class constructor accepts a given parameter.
+
+    Some constructors (e.g. ``XGBRegressor``) declare only ``**kwargs`` and
+    forward them to a parent class, so the parameter is only visible in an
+    ancestor's signature. Ancestors are searched only when the constructor
+    accepts ``**kwargs``: a parameter declared by an ancestor but absent from
+    a fully explicit child signature (e.g. ``random_state`` for ``SVR``) is
+    rejected by the child constructor.
+    """
     sig = inspect.signature(model_class.__init__)
-    return param_name in sig.parameters
+    if param_name in sig.parameters:
+        return True
+
+    accepts_kwargs = any(
+        p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    if not accepts_kwargs:
+        return False
+
+    for klass in model_class.__mro__[1:]:
+        init = klass.__dict__.get("__init__")
+        if init is None:
+            continue
+        try:
+            if param_name in inspect.signature(init).parameters:
+                return True
+        except (ValueError, TypeError):
+            continue
+    return False

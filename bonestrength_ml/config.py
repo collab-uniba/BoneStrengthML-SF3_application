@@ -155,6 +155,18 @@ class OptimizationConfig(BaseModel):
     cv: int = 5
     scoring: str | None = None
 
+    @field_validator("feature_selection", "scoring", mode="before")
+    @classmethod
+    def coerce_none_string(cls, v: Any) -> Any:
+        """Treat the YAML strings "None"/"null" as missing values.
+
+        YAML only parses ``null``/``~`` as None, so a config written as
+        ``scoring: None`` would otherwise become the literal string "None".
+        """
+        if isinstance(v, str) and v.strip().lower() in ("none", "null"):
+            return None
+        return v
+
 
 class ModelConfig(BaseModel):
     """Individual model configuration."""
