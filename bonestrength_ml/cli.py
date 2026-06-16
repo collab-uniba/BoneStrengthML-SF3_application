@@ -57,6 +57,19 @@ def train(
         help="Skip verification (and therefore registration) of winning models. "
         "No effect when --model is also specified (that path never verifies).",
     ),
+    max_workers: int = typer.Option(
+        2,  # keep in sync with flows.DEFAULT_MAX_WORKERS
+        "--max-workers",
+        help="How many models to train concurrently. Per-search n_jobs is sized "
+        "so max_workers x n_jobs stays within --cpu-fraction of the CPUs, "
+        "avoiding oversubscription. Ignored with --model (single inline run).",
+    ),
+    cpu_fraction: float = typer.Option(
+        0.9,  # keep in sync with flows.DEFAULT_CPU_FRACTION
+        "--cpu-fraction",
+        help="Fraction of available CPUs the whole run may use (default 0.9 "
+        "leaves headroom for other activity).",
+    ),
 ) -> None:
     """Run the training + verification pipeline.
 
@@ -73,11 +86,17 @@ def train(
                                               retrain shortcut: NO verification,
                                               NO registration.
     """
+    from prefect.task_runners import ThreadPoolTaskRunner
+
     from bonestrength_ml.workflows.flows import (
         train_all_outputs_flow,
         train_single_output_flow,
         train_specific_model_flow,
     )
+
+    # Run max_workers training tasks concurrently. The flows size per-search
+    # n_jobs against the CPU budget so the two levels don't oversubscribe.
+    task_runner = ThreadPoolTaskRunner(max_workers=max_workers)
 
     console.print("[bold blue]BoneStrengthML Training Pipeline[/bold blue]")
     console.print(f"MLflow URI: {mlflow_uri}")
@@ -99,24 +118,28 @@ def train(
 
     elif output:
         console.print(f"Training all models for {output}...")
-        results = train_single_output_flow(
+        results = train_single_output_flow.with_options(task_runner=task_runner)(
             output_name=output,
             config_path=config,
             mlflow_tracking_uri=mlflow_uri,
             experiment_name=experiment,
             random_state=seed,
             skip_verification=skip_verification,
+            max_workers=max_workers,
+            cpu_fraction=cpu_fraction,
         )
         _print_results_table(results)
 
     else:
         console.print("Training all models for all outputs...")
-        all_results = train_all_outputs_flow(
+        all_results = train_all_outputs_flow.with_options(task_runner=task_runner)(
             config_path=config,
             mlflow_tracking_uri=mlflow_uri,
             experiment_name=experiment,
             random_state=seed,
             skip_verification=skip_verification,
+            max_workers=max_workers,
+            cpu_fraction=cpu_fraction,
         )
         for output_name, results in all_results.items():
             console.print(f"\n[bold]{output_name}[/bold]")
