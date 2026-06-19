@@ -6,7 +6,7 @@ import pandas as pd
 from prefect import task
 from prefect.runtime import task_run
 
-from bonestrength_ml.config import BoneStrengthMLConfig, ModelConfig, load_config
+import vv4ml as vv
 from bonestrength_ml.data_loading import (
     get_input_columns,
     get_output_columns,
@@ -22,15 +22,15 @@ from bonestrength_ml.training.trainer import TrainingResult, train_single_model
 
 
 @task(name="load_config", retries=0)
-def task_load_config(config_path: str | Path | None = None) -> BoneStrengthMLConfig:
+def task_load_config(config_path: str | Path | None = None) -> vv.Config:
     """Load and validate configuration."""
     if config_path:
-        return load_config(config_path)
-    return load_config()
+        return vv.load_config(config_path)
+    return vv.load_config()
 
 
 @task(name="load_data", retries=1, retry_delay_seconds=5)
-def task_load_data(config: BoneStrengthMLConfig) -> pd.DataFrame:
+def task_load_data(config: vv.Config) -> pd.DataFrame:
     """Load and validate dataset."""
     return load_and_validate_data(config=config)
 
@@ -38,7 +38,7 @@ def task_load_data(config: BoneStrengthMLConfig) -> pd.DataFrame:
 @task(name="prepare_features_targets")
 def task_prepare_features_targets(
     df: pd.DataFrame,
-    config: BoneStrengthMLConfig,
+    config: vv.Config,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Split DataFrame into features (X) and targets (y)."""
     X = df[get_input_columns(config)]
@@ -50,7 +50,7 @@ def task_prepare_features_targets(
 def task_split_data(
     X: pd.DataFrame,
     y: pd.DataFrame,
-    config: BoneStrengthMLConfig,
+    config: vv.Config,
     random_state: int = 42,
 ) -> dict[str, TrainTestData]:
     """Split data for all outputs.
@@ -88,9 +88,9 @@ def _train_task_run_name() -> str:
     tags=["training"],
 )
 def task_train_model(
-    model_config: ModelConfig,
+    model_config: vv.ModelConfig,
     data: TrainTestData,
-    config: BoneStrengthMLConfig,
+    config: vv.Config,
     random_state: int = 42,
 ) -> TrainingResult:
     """Train a single model on single output."""
@@ -105,7 +105,7 @@ def task_train_model(
 @task(name="log_result_to_mlflow")
 def task_log_result(
     result: TrainingResult,
-    config: BoneStrengthMLConfig,
+    config: vv.Config,
     X_sample: pd.DataFrame,
     register_model: bool = False,
 ) -> str:
@@ -121,7 +121,7 @@ def task_log_result(
 @task(name="log_experiment_summary")
 def task_log_summary(
     results: list[TrainingResult],
-    config: BoneStrengthMLConfig,
+    config: vv.Config,
 ) -> str:
     """Log experiment summary to MLflow."""
     return log_experiment_summary(results, config)

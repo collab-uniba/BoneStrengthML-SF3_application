@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
-from bonestrength_ml.config import BoneStrengthMLConfig, TrainTestSplitConfig
+import vv4ml as vv
 
 
 @dataclass
@@ -24,7 +24,7 @@ class TrainTestData:
 def prepare_train_test_split(
     X: pd.DataFrame,
     y: pd.DataFrame,
-    config: BoneStrengthMLConfig,
+    config: vv.Config,
     random_state: int = 42,
 ) -> dict[str, TrainTestData]:
     """Config-aware train/test split for all outputs.
@@ -64,7 +64,7 @@ def prepare_train_test_split(
 def split_data_for_all_outputs(
     X: pd.DataFrame,
     y: pd.DataFrame,
-    split_config: TrainTestSplitConfig,
+    split_config: vv.TrainTestSplitConfig,
     random_state: int = 42,
     groups: np.ndarray | None = None,
 ) -> dict[str, TrainTestData]:
@@ -125,7 +125,7 @@ def split_data_for_all_outputs(
 def _grouped_split(
     X: pd.DataFrame,
     groups: np.ndarray | None,
-    split_config: TrainTestSplitConfig,
+    split_config: vv.TrainTestSplitConfig,
     random_state: int,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Perform group-aware train/test split using GroupShuffleSplit.

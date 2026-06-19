@@ -10,14 +10,14 @@ from pathlib import Path
 import pandas as pd
 import pandera.pandas as pa
 from pandera.pandas import Column, DataFrameSchema
-
-from bonestrength_ml.config import (
-    BoneStrengthMLConfig,
-    DatasetConfig,
-    InputField,
-    OutputField,
-    load_config,
-)
+import vv4ml as vv
+#from bonestrength_ml.config import (
+#    BoneStrengthMLConfig,
+#    DatasetConfig,
+#    InputField,
+#    OutputField,
+#    load_config,
+#)
 
 
 class DataValidationError(Exception):
@@ -29,7 +29,7 @@ class DataValidationError(Exception):
 
 
 def _build_column_schema(
-    field: InputField | OutputField,
+    field: vv.InputField | vv.OutputField,
 ) -> Column:
     """Build a Pandera Column schema from a field specification.
 
@@ -60,7 +60,7 @@ def _build_column_schema(
     )
 
 
-def build_schema_from_config(dataset_config: DatasetConfig) -> DataFrameSchema:
+def build_schema_from_config(dataset_config: vv.DatasetConfig) -> DataFrameSchema:
     """Build a Pandera DataFrameSchema from dataset configuration.
 
     Args:
@@ -89,7 +89,7 @@ def build_schema_from_config(dataset_config: DatasetConfig) -> DataFrameSchema:
 
 
 def load_raw_data(
-    config: BoneStrengthMLConfig | None = None,
+    config: vv.Config | None = None,
     data_path: str | Path | None = None,
 ) -> pd.DataFrame:
     """Load raw data from CSV file based on configuration.
@@ -105,7 +105,7 @@ def load_raw_data(
         FileNotFoundError: If the data file doesn't exist.
     """
     if config is None:
-        config = load_config()
+        config = vv.load_config()
 
     dataset_config = config.dataset
     format_meta = dataset_config.format_metadata
@@ -140,7 +140,7 @@ def load_raw_data(
 
 def validate_data(
     df: pd.DataFrame,
-    config: BoneStrengthMLConfig | None = None,
+    config: vv.Config | None = None,
     schema: DataFrameSchema | None = None,
 ) -> pd.DataFrame:
     """Validate a DataFrame against the schema derived from configuration.
@@ -158,7 +158,7 @@ def validate_data(
     """
     if schema is None:
         if config is None:
-            config = load_config()
+            config = vv.load_config()
         schema = build_schema_from_config(config.dataset)
 
     try:
@@ -172,7 +172,7 @@ def validate_data(
 
 
 def load_and_validate_data(
-    config: BoneStrengthMLConfig | None = None,
+    config: vv.Config | None = None,
     data_path: str | Path | None = None,
 ) -> pd.DataFrame:
     """Load and validate raw data in a single step.
@@ -197,7 +197,7 @@ def load_and_validate_data(
         (1000000, 97)
     """
     if config is None:
-        config = load_config()
+        config = vv.load_config()
 
     df = load_raw_data(config=config, data_path=data_path)
     validated_df = validate_data(df, config=config)
@@ -205,7 +205,7 @@ def load_and_validate_data(
     return validated_df
 
 
-def get_input_columns(config: BoneStrengthMLConfig | None = None) -> list[str]:
+def get_input_columns(config: vv.Config | None = None) -> list[str]:
     """Get list of input column names from configuration.
 
     Args:
@@ -215,11 +215,11 @@ def get_input_columns(config: BoneStrengthMLConfig | None = None) -> list[str]:
         List of input column names.
     """
     if config is None:
-        config = load_config()
+        config = vv.load_config()
     return [field.name for field in config.dataset.inputs]
 
 
-def get_output_columns(config: BoneStrengthMLConfig | None = None) -> list[str]:
+def get_output_columns(config: vv.Config | None = None) -> list[str]:
     """Get list of output column names from configuration.
 
     Args:
@@ -229,5 +229,5 @@ def get_output_columns(config: BoneStrengthMLConfig | None = None) -> list[str]:
         List of output column names.
     """
     if config is None:
-        config = load_config()
+        config = vv.load_config()
     return [field.name for field in config.dataset.outputs]

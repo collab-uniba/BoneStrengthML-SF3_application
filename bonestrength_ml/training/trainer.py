@@ -7,13 +7,7 @@ import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import GridSearchCV, GroupKFold, RandomizedSearchCV
 
-from bonestrength_ml.config import ModelConfig, OptimizationConfig
-from bonestrength_ml.training.metrics import evaluate_predictions, rmse_scorer
-from bonestrength_ml.training.model_factory import (
-    create_model,
-    get_param_grid,
-    normalize_gpr_best_params,
-)
+import vv4ml as vv
 from bonestrength_ml.training.splitter import TrainTestData
 
 
@@ -32,9 +26,9 @@ class TrainingResult:
 
 
 def train_single_model(
-    model_config: ModelConfig,
+    model_config: vv.ModelConfig,
     data: TrainTestData,
-    global_optimization: OptimizationConfig,
+    global_optimization: vv.OptimizationConfig,
     random_state: int = 42,
 ) -> TrainingResult:
     """Train a single model with hyperparameter optimization.
@@ -52,8 +46,8 @@ def train_single_model(
     opt_config = model_config.optimization or global_optimization
 
     # Create base model and parameter grid
-    base_model = create_model(model_config, random_state=random_state)
-    param_grid = get_param_grid(model_config)
+    base_model = vv.create_model(model_config, random_state=random_state)
+    param_grid = vv.get_param_grid(model_config)
 
     # Skip search if no hyperparameters to tune
     if not param_grid:
@@ -74,7 +68,7 @@ def train_single_model(
         best_estimator = search.best_estimator_
         best_params = search.best_params_
         if model_config.type == "GaussianProcessRegressor":
-            best_params = normalize_gpr_best_params(best_params)
+            best_params = vv.normalize_gpr_best_params(best_params)
         cv_results = search.cv_results_
 
     # Evaluate on train and test
@@ -82,8 +76,8 @@ def train_single_model(
     y_pred_train = best_estimator.predict(data.X_train).ravel()
     y_pred_test = best_estimator.predict(data.X_test).ravel()
 
-    train_metrics = evaluate_predictions(data.y_train.values, y_pred_train)
-    test_metrics = evaluate_predictions(data.y_test.values, y_pred_test)
+    train_metrics = vv.evaluate_predictions(data.y_train.values, y_pred_train)
+    test_metrics = vv.evaluate_predictions(data.y_test.values, y_pred_test)
 
     return TrainingResult(
         model_label=model_config.label or model_config.type,
@@ -100,7 +94,7 @@ def train_single_model(
 def _create_search(
     base_model: BaseEstimator,
     param_grid: dict[str, list[Any]],
-    opt_config: OptimizationConfig,
+    opt_config: vv.OptimizationConfig,
     random_state: int,
     groups_train: np.ndarray | None = None,
 ) -> GridSearchCV | RandomizedSearchCV:
@@ -109,7 +103,7 @@ def _create_search(
 
     common_kwargs = {
         "estimator": base_model,
-        "scoring": rmse_scorer,
+        "scoring": vv.rmse_scorer,
         "cv": cv,
         "n_jobs": opt_config.n_jobs,
         "return_train_score": True,

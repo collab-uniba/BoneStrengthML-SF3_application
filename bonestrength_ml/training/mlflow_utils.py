@@ -10,7 +10,7 @@ import pandas as pd
 from mlflow.models import infer_signature
 from sklearn.base import BaseEstimator
 
-from bonestrength_ml.config import BoneStrengthMLConfig
+import vv4ml as vv
 from bonestrength_ml.training.trainer import TrainingResult
 
 
@@ -55,7 +55,7 @@ def setup_mlflow(
 
 def log_training_result(
     result: TrainingResult,
-    config: BoneStrengthMLConfig,
+    config: vv.Config,
     X_sample: pd.DataFrame,
     run_name: str | None = None,
     register_model: bool = False,
@@ -128,7 +128,7 @@ def log_training_result(
 
 def log_experiment_summary(
     results: list[TrainingResult],
-    config: BoneStrengthMLConfig,
+    config: vv.Config,
 ) -> str:
     """Log a summary run comparing all models.
 
