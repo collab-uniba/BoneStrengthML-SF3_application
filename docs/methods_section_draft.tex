@@ -1,0 +1,656 @@
+% =============================================================================
+% Methods section draft for the BoneStrengthML / V&V 40 MLOps paper
+% -----------------------------------------------------------------------------
+% Extracted from the replication package (branch: main, HEAD 27d3196,
+% analysed on 2026-09-12). This file is meant to be \input into the paper's
+% main .tex file; it contains no preamble. It relies only on standard
+% packages (booktabs, amsmath, siunitx is NOT required).
+%
+% Conventions used in this draft:
+%   * [TODO: ...]   information the authors must fill in / confirm.
+%   * [CHECK: ...]  a claim the analyst could not verify from the repository.
+% Every factual statement below is traceable to a file in the repository;
+% the file is named in a LaTeX comment where useful.
+%
+% Section 8 ("Analyst notes") is NOT meant for the paper: it lists the
+% misalignments between the abstract and the repository, and the open
+% questions for the authors.
+% =============================================================================
+
+\section{Methods}
+\label{sec:methods}
+
+% -----------------------------------------------------------------------------
+\subsection{Research design}
+\label{sec:methods:design}
+
+We conducted an engineering research study~[TODO: cite the ACM SIGSOFT
+Empirical Standard for Engineering Research, or Wieringa's design science
+framework] in which we (i)~designed and implemented an MLOps pipeline that
+embeds verification-side credibility activities of ASME V\&V~40 as
+first-class, configuration-driven pipeline stages, and (ii)~evaluated the
+resulting artifact on a single, in-depth case study: BoneStrengthML, a
+machine-learning surrogate of a finite-element (FE) bone-strain model.
+The evaluation is exploratory and descriptive: we assess whether, and for
+which credibility factors, the pipeline is able to generate, version, and make
+queryable the evidence required by the model's context of use (COU).
+The replication package (code, configuration, sample data, and this
+document) is publicly available~[TODO: cite the GitHub repository / archived
+DOI].
+
+% -----------------------------------------------------------------------------
+\subsection{Case study: BoneStrengthML and its context of use}
+\label{sec:methods:case}
+
+\subsubsection{The surrogate modelling task}
+% Sources: README.md, docs/Context_of_use.md, config/BoneStrengthML.yml
+
+BoneStrength is a resource-demanding, patient-specific finite-element
+model that predicts the strain induced in the proximal femur during a
+simulated side fall, starting from CT-derived femur characteristics.
+BoneStrengthML is intended as a regression surrogate of BoneStrength for
+research-grade fracture-risk assessment. Its input space has 95
+dimensions:
+
+\begin{itemize}
+  \item 93 principal-component scores (\texttt{PC\_1}--\texttt{PC\_93}) of a
+    morpho-densitometric statistical atlas of the femur, summarising the
+    geometry and the mineral-density distribution of the bone sampled over a
+    Cartesian lattice; and
+  \item two integer angles, \texttt{PosAnt}~$\in[-30, 30]^\circ$ and
+    \texttt{MedLat}~$\in[-30, 0]^\circ$, describing the orientation of the
+    impact force during the fall.
+\end{itemize}
+
+The surrogate predicts two scalar outputs, each treated as an independent
+single-output regression problem: \texttt{maxStrain\_11}, the maximum first
+principal strain (tension), and \texttt{maxStrain\_33}, the absolute value of
+the minimum third principal strain (compression). Both are dimensionless
+strains, reported here in microstrain ($\mu\varepsilon$).
+The admissible range of every input and output is declared in the pipeline
+configuration (Section~\ref{sec:methods:config}) and is used both to validate
+the training data and to sample the input space during verification.
+
+\subsubsection{Dataset}
+% Sources: data/raw/sampleDataset.csv (inspected), config/BoneStrengthML.yml,
+% docs/Machine Learning Canvas.md (deleted in commit cbfd4f8, but informative)
+
+All training and test data are synthetic: each row is one BoneStrength FE
+simulation for one femur (atlas coordinates) under one fall orientation.
+The dataset shipped with the replication package
+(\texttt{data/raw/sampleDataset.csv}, semicolon-separated CSV, 72\,MB) has the
+characteristics summarised in Table~\ref{tab:dataset}.
+[CHECK: the file is called \emph{sample}Dataset; the code's docstrings mention
+a $10^6 \times 97$ dataset. Confirm whether the experiments were run on this
+file or on a larger one.]
+
+\begin{table}[htbp]
+  \centering
+  \caption{Characteristics of the dataset in the replication package.}
+  \label{tab:dataset}
+  \begin{tabular}{lr}
+    \toprule
+    Rows (FE simulations)                          & 45\,332 \\
+    Columns (95 inputs + 2 outputs)                & 97 \\
+    Distinct femurs (distinct \texttt{PC\_*} tuples) & 1\,044 \\
+    Distinct rows                                  & 37\,472 \\
+    Distinct \texttt{PosAnt} values                & 61 (all integers in $[-30,30]$) \\
+    Distinct \texttt{MedLat} values                & 31 (all integers in $[-30,0]$) \\
+    \texttt{maxStrain\_11} range                   & 685--7\,365 $\mu\varepsilon$ \\
+    \texttt{maxStrain\_33} range                   & 1\,657--19\,288 $\mu\varepsilon$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Rows for the same femur differ only in the two impact angles; consequently
+the dataset is \emph{clustered by femur}, a property that drives the data
+partitioning strategy (Section~\ref{sec:methods:split}). Exact duplicate rows
+are present and are explicitly declared as admissible in the configuration
+(\texttt{duplicate\_rows: true}).
+
+\subsubsection{COU-derived credibility requirements}
+\label{sec:methods:cou}
+% Source: docs/Context_of_use.md
+
+The COU document fixes the acceptance thresholds against which the surrogate
+is assessed. They derive from the clinical fracture thresholds
+($7300\,\mu\varepsilon$ in tension and $10\,400\,\mu\varepsilon$ in
+compression)~[TODO: cite] and from the accuracy of the FE model being
+surrogated (7\,\% RMSE normalised to the maximum value, i.e.\ an error of
+$511\,\mu\varepsilon$ on \texttt{maxStrain\_11} and
+$729\,\mu\varepsilon$ on \texttt{maxStrain\_33}). The surrogate is
+required to be one order of magnitude more accurate than the FE model it
+replaces, and the numerical (training-related) error is in turn required to
+be one order of magnitude below the surrogate's accuracy threshold.
+Because no error larger than the threshold is acceptable, accuracy is
+assessed with the infinity norm of the error (maximum absolute error) rather
+than with an average. Uncertainty quantification was deemed not applicable,
+since the surrogate's inputs are simulation parameters with no associated
+measurement error. Table~\ref{tab:cou} lists the requirements.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Credibility requirements derived from the context of use
+    (\texttt{docs/Context\_of\_use.md}) and their encoding in the pipeline
+    configuration (\texttt{config/BoneStrengthML.yml}). MAE$_\infty$ = maximum
+    absolute error; MRE = mean relative error; MRER = maximum relative error
+    ratio.}
+  \label{tab:cou}
+  \small
+  \begin{tabular}{p{2.6cm}p{4.3cm}p{4.6cm}p{2.2cm}}
+    \toprule
+    Requirement & COU statement & Configuration & Status in code \\
+    \midrule
+    Accuracy (validation gate) &
+      MAE$_\infty \le 51\,\mu\varepsilon$ (\texttt{maxStrain\_11}) and
+      $\le 73\,\mu\varepsilon$ (\texttt{maxStrain\_33}) &
+      \texttt{gate\_thresholds.validation}: MaximumAbsoluteError $5.1\times10^{-5}$ and $7.3\times10^{-5}$ &
+      Declared; not enforced \\
+    Input-space coverage &
+      $\ge 10^6$ samples of the 95-D input space &
+      Latin Hypercube sampling; \texttt{lhs\_samples} defaults to 1\,000 &
+      Sampler implemented; requirement not met by default \\
+    Convergence &
+      relative error w.r.t.\ fully-trained model $\le 5\,\%$ &
+      \texttt{convergence}: MRE $\le 0.05$, subsets $n \in \{100, 250, 500, 1000\}$ &
+      Implemented, enabled \\
+    Perturbation stability (smoothness) &
+      input relative error not amplified; test 40\,\% of admissible space; perturb each input by $10^{-3}$ of its range &
+      \texttt{smoothness}: MRER $\le 1$, \texttt{sample\_fraction} 0.4, \texttt{perturbation\_scaled\_magnitude} 0.001 &
+      Implemented, enabled \\
+    Numerical error &
+      std.\ dev.\ of outputs over $\ge 10$ repeated trainings $\le 5.1\,\mu\varepsilon$ / $7.3\,\mu\varepsilon$ &
+      \texttt{numerical\_error}: MaxStandardDeviation $5.1\times10^{-6}$ / $7.3\times10^{-6}$, \texttt{sets: 10} &
+      Commented out; not implemented \\
+    Existence / coverage check &
+      (not in COU text) &
+      \texttt{existence}: \texttt{samples: 1000} &
+      Commented out; not implemented \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% -----------------------------------------------------------------------------
+\subsection{Pipeline architecture and tooling}
+\label{sec:methods:arch}
+% Sources: pyproject.toml, uv.lock, docs/workflow-architecture.md
+
+The pipeline is a Python~3.11 package (\texttt{bonestrength\_ml}) exposing a
+command-line interface (\texttt{bsml}). It is organised in four layers
+(Figure~\ref{fig:arch}~[TODO: adapt the architecture diagram from
+\texttt{docs/workflow-architecture.md}]):
+
+\begin{enumerate}
+  \item a \textbf{configuration layer}, in which a single YAML file describes
+    the dataset schema, the model-building procedure, the verification tests
+    and the acceptance thresholds, and is validated at start-up against
+    typed Pydantic models;
+  \item a \textbf{library layer} with pure, orchestration-agnostic functions
+    for data validation, splitting, training, metrics, verification, and
+    experiment logging;
+  \item an \textbf{orchestration layer}, where Prefect tasks wrap the library
+    functions and Prefect flows compose them, providing retries, task
+    naming, tagging, fan-out/fan-in parallelism and an optional monitoring
+    UI; and
+  \item a \textbf{tracking layer}, where MLflow records every trained model as
+    a run, attaches verification evidence to the run of the selected model,
+    and promotes it to the MLflow Model Registry when all verification
+    tests pass.
+\end{enumerate}
+
+Table~\ref{tab:tools} lists the tools with the exact versions pinned in the
+lock file of the replication package.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Software stack of the pipeline (versions from \texttt{uv.lock}).}
+  \label{tab:tools}
+  \small
+  \begin{tabular}{llp{6.8cm}}
+    \toprule
+    Concern & Tool (version) & Role in the pipeline \\
+    \midrule
+    Language / packaging & Python 3.11; uv & Reproducible environment from a committed lock file \\
+    Orchestration & Prefect 3.6.10 & Flows and tasks, retries, parallel task submission, run monitoring UI \\
+    Experiment tracking & MLflow 3.8.1 & Run tracking (params, metrics, tags, artifacts), model logging with signature, Model Registry; local SQLite backend by default \\
+    Configuration validation & Pydantic 2.12.5, PyYAML 6.0.3 & Typed schema for the YAML configuration; fail-fast on malformed configuration \\
+    Data validation & Pandera 0.27.0, pandas 2.3.3 & DataFrame schema generated from the configuration (types, ranges, nullability, strict columns, duplicates) \\
+    Model building & scikit-learn 1.8.0, XGBoost 3.1.3, CatBoost 1.2.10 & Estimators, cross-validated hyperparameter search, group-aware splitting \\
+    Numerics & NumPy 2.4.0, SciPy 1.17.0 & Latin Hypercube sampling, metrics \\
+    CLI / console & Typer 0.20.1, Rich 14.2.0 & \texttt{bsml train}, \texttt{bsml list-models}, \texttt{bsml mlflow-ui} \\
+    Data versioning & --- & \emph{No data-versioning tool is present in the package (see Section~\ref{sec:notes}); the dataset is committed to Git.} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsubsection{Configuration-driven design}
+\label{sec:methods:config}
+% Sources: config/BoneStrengthML.yml, bonestrength_ml/config.py
+
+All experiment parameters live in one versioned YAML file
+(\texttt{config/BoneStrengthML.yml}, about 630 lines) with four top-level
+sections: \texttt{dataset} (name, path, provenance and version metadata, CSV
+format metadata, and one entry per input and output field with its type,
+admissible range, unit and nullability), \texttt{model\_building} (train/test
+split, preprocessing flags, global hyperparameter-optimisation settings, and
+the list of candidate models with their search spaces),
+\texttt{verification} (the ordered list of verification tests, each with its
+per-output thresholds and parameters), and \texttt{gate\_thresholds}
+(validation acceptance criteria per output). The same field ranges thus serve
+three purposes: data validation, Latin Hypercube sampling of the input space,
+and perturbation sizing in the smoothness test. Because the configuration is
+under version control together with the code, every pipeline execution is
+tied to a specific revision of both.
+
+% -----------------------------------------------------------------------------
+\subsection{Experimental workflow}
+\label{sec:methods:workflow}
+% Sources: bonestrength_ml/workflows/flows.py, tasks.py
+
+The main flow (\texttt{train\_all\_outputs}, invoked by \texttt{bsml train})
+implements a \emph{train $\rightarrow$ compare $\rightarrow$ verify
+$\rightarrow$ register} lifecycle (Figure~\ref{fig:workflow}~[TODO: adapt the
+Mermaid flowchart from \texttt{docs/workflow-architecture.md}]). Its stages
+are:
+
+\begin{enumerate}
+  \item \textbf{Set-up.} Load and validate the configuration; set the MLflow
+    tracking URI and create or select the experiment.
+  \item \textbf{Data loading and validation.} Read the CSV according to the
+    declared format metadata and validate it against the schema generated
+    from the configuration (Section~\ref{sec:methods:data}).
+  \item \textbf{Partitioning.} Project the frame into features and targets and
+    build one train/test split shared by all outputs
+    (Section~\ref{sec:methods:split}).
+  \item \textbf{Model building (fan-out).} Submit one Prefect task per
+    (model family $\times$ output) pair, i.e.\ $8 \times 2 = 16$ tasks, each
+    performing a cross-validated hyperparameter search and logging its own
+    MLflow run as soon as it completes (Section~\ref{sec:methods:training}).
+  \item \textbf{Comparison (fan-in).} Once all tasks have completed, log a
+    summary MLflow run containing a comparison table of all models and
+    select, for each output, the model with the lowest test RMSE
+    (the \emph{winner}).
+  \item \textbf{Verification (fan-out).} Run the configured verification
+    tests on each winner in parallel and attach the results to the winner's
+    MLflow run (Section~\ref{sec:methods:verification}).
+  \item \textbf{Conditional registration.} Register a winner in the MLflow
+    Model Registry if and only if every verification test passed
+    (Section~\ref{sec:methods:gate}).
+\end{enumerate}
+
+Two reduced flows exist for iteration: one restricted to a single output
+(steps 1--7 for that output) and one restricted to a single model family and
+output (steps 1--4 only, with no verification and no registration).
+Verification can also be skipped with a CLI flag, in which case no
+registration takes place.
+
+\subsubsection{Data loading and validation}
+\label{sec:methods:data}
+% Source: bonestrength_ml/data_loading.py
+
+A Pandera \texttt{DataFrameSchema} is generated at run time from the
+\texttt{dataset} section of the configuration: every declared column receives
+a dtype (\texttt{Float64} or \texttt{Int64}, with coercion), a range check on
+its admissible interval and a nullability constraint; the schema is
+\emph{strict}, so undeclared columns cause a failure, and rows are required
+to be jointly unique unless duplicates are explicitly allowed. Validation is
+lazy, so all violations are collected and reported at once, and the task is
+retried once on failure.
+
+\subsubsection{Data partitioning}
+\label{sec:methods:split}
+% Source: bonestrength_ml/training/splitter.py
+
+Because every femur appears in many rows (one per impact orientation), a
+row-wise random split would place the same femur in both partitions and
+inflate test performance. The pipeline therefore uses a \emph{group-aware}
+split: a group label is derived from the 93 atlas coordinates (rows with
+identical \texttt{PC\_*} values are the same femur) and
+\texttt{GroupShuffleSplit} assigns 70\,\% of the \emph{femurs} to training
+and 30\,\% to test, with a fixed seed. The same indices are reused for both
+outputs, so all 16 models are trained and evaluated on identical samples, and
+the same split function is invoked again by the verification tests, which
+therefore see exactly the training partition used for model building. A
+plain random row split remains available as a configuration option.
+
+\subsubsection{Model building and hyperparameter optimisation}
+\label{sec:methods:training}
+% Sources: bonestrength_ml/training/model_factory.py, trainer.py, metrics.py,
+% config/BoneStrengthML.yml
+
+Eight regression families are compared (Table~\ref{tab:models}). For each,
+the configuration lists the hyperparameters: scalar values are fixed, list
+values define the search space. Search is cross-validated with 5 folds; when
+the grouped split is active, folds are built with \texttt{GroupKFold} on the
+same femur labels, so no femur is shared between a training and a validation
+fold. The scoring function is the negative RMSE. Two search strategies are
+available and selected per model: exhaustive \texttt{GridSearchCV} (default)
+and \texttt{RandomizedSearchCV}, the latter capped at 50 sampled
+configurations and used for the two largest grids (random forest and
+XGBoost). The best estimator is refitted on the full training partition and
+evaluated on both partitions with MSE, RMSE, MAE, maximum absolute error and
+$R^2$. Gaussian-process regression is wrapped in a pipeline with a
+\texttt{StandardScaler}; the other families receive raw inputs, since the
+global \texttt{normalization}/\texttt{standardization} flags are set to
+\texttt{false}. A single random seed (default 42) is propagated to the split,
+the search, and every estimator that accepts one.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Candidate model families and hyperparameter search spaces
+    (\texttt{config/BoneStrengthML.yml}). Sizes are the number of grid points;
+    randomised search evaluates at most 50 of them.}
+  \label{tab:models}
+  \small
+  \begin{tabular}{llp{6.2cm}rl}
+    \toprule
+    Family & Library & Searched hyperparameters & Grid size & Search \\
+    \midrule
+    Random forest & scikit-learn & n\_estimators (15), max\_depth (10), min\_samples\_split (3), min\_samples\_leaf (4) & 1\,800 & Randomised (50) \\
+    XGBoost & XGBoost & n\_estimators (16), max\_depth (8), learning\_rate (5), subsample (5), colsample\_bytree (5), gamma (6) & 96\,000 & Randomised (50) \\
+    Support-vector regression & scikit-learn & C (4), epsilon (7), gamma (2), kernel (3), degree (2) & 336 & Grid \\
+    Linear regression & scikit-learn & --- (fit\_intercept fixed) & 1 & none \\
+    Multi-layer perceptron & scikit-learn & hidden\_layer\_sizes (3), activation (2), alpha (5), learning\_rate\_init (5) & 150 & Grid \\
+    Partial least squares & scikit-learn & n\_components (20) & 20 & Grid \\
+    CatBoost & CatBoost & iterations (8), depth (3), learning\_rate (3), l2\_leaf\_reg (5), bagging\_temperature (6) & 2\,160 & Grid \\
+    Gaussian process (scaled) & scikit-learn & kernel (3: RBF short, RBF unit, RBF+DotProduct+White), alpha (3) & 9 & Grid \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsubsection{Model selection}
+% Source: bonestrength_ml/workflows/flows.py
+
+For each output, the winner is the model with the lowest RMSE on the held-out
+test partition. The comparison table (RMSE, $R^2$, MAE, maximum absolute
+error for every model and output) and the winner per output are logged in a
+dedicated \texttt{experiment\_summary} MLflow run.
+
+\subsubsection{Verification suite}
+\label{sec:methods:verification}
+% Sources: bonestrength_ml/verification/*.py
+
+Verification is implemented as a pluggable, registry-based suite: each test
+is a module that registers a check function under a name; the orchestrator
+iterates over the tests listed in the configuration, in the declared order,
+and builds for each a context holding the winning model, the full feature and
+target frames, the configuration entry and the seed. Every check returns a
+uniform result (pass/fail flag, metrics, parameters, details), and the
+results are aggregated into a report whose \texttt{all\_passed} property
+gates registration. Adding a test requires a new module and a YAML entry
+only; flows, logging and CLI are unchanged.
+
+\paragraph{Input-space sampling.}
+Both implemented tests evaluate the surrogate on synthetic points drawn by
+Latin Hypercube Sampling (LHS) over the 95-dimensional box defined by the
+configured admissible ranges, rather than on observed data. The sampler is a
+basic (non-optimised) LHS with a fixed seed; a maximin variant is implemented
+but not used. The number of points defaults to 1\,000 and can be raised per
+test via the \texttt{lhs\_samples} parameter.
+
+\paragraph{Convergence test.}
+The test checks that the winner's predictions are stable with respect to the
+amount of training data. For each subset size $k \in \{100, 250, 500,
+1000\}$, $k$ rows are drawn at random from the training partition, a fresh
+model with the winner's type and optimal hyperparameters is fitted on them,
+and its predictions on the LHS points are compared with those of the winner
+through the mean relative error, $\mathrm{MRE} = \frac{1}{n}\sum_i
+|(\hat y^{(k)}_i - \hat y^{\star}_i)/\hat y^{\star}_i|$. The test passes if
+the MRE is at or below the threshold (5\,\%) for the largest subset and for
+every larger subset after the last exceedance; the smallest such $k$ is
+reported as the minimum converging training-set size.
+
+\paragraph{Smoothness (perturbation-stability) test.}
+A fraction (40\,\%) of the LHS points is sampled; at each point and for each
+input dimension $j$, the input is perturbed by $\pm\delta_j$, with $\delta_j$
+equal to $10^{-3}$ of the admissible range of dimension $j$, and the
+normalised central-difference partial derivative
+\[
+  \mathrm{MRER}_{ij} =
+  \left|\frac{\hat y(x_i + \delta_j e_j) - \hat y(x_i - \delta_j e_j)}{2\,\delta_j}
+  \cdot \frac{x_{ij}}{\hat y(x_i)}\right|
+\]
+is computed, i.e.\ the ratio between the relative change of the output and
+the relative change of the input. The test passes if the maximum ratio over
+all points and dimensions is at most 1, meaning that the surrogate does not
+amplify relative input errors and its response surface shows no spurious
+oscillation at the perturbation scale.
+
+\paragraph{Tests specified but not yet implemented.}
+The configuration contains, commented out, a \emph{numerical error} test
+(train the optimal configuration on 10 independent random subsets, require
+the maximum per-point standard deviation of the predictions to stay below
+$5.1\,\mu\varepsilon$ / $7.3\,\mu\varepsilon$) and an \emph{existence} test
+(1\,000 samples, no threshold). Reference skeletons of both convergence and
+numerical-error tests written by the FE-model developers are included in
+\texttt{references/} and were the basis for the pipeline implementations.
+
+\subsubsection{Registration gate}
+\label{sec:methods:gate}
+% Sources: bonestrength_ml/workflows/tasks.py, training/mlflow_utils.py
+
+A winner is registered in the MLflow Model Registry under the name
+\texttt{BoneStrengthML\_\{output\}\_\{model\}} only if every configured
+verification test passed. A failed test leaves the model logged and
+inspectable, with its failure recorded, but not promoted.
+
+% -----------------------------------------------------------------------------
+\subsection{Evidence logging and traceability}
+\label{sec:methods:evidence}
+% Source: bonestrength_ml/training/mlflow_utils.py
+
+MLflow is used as the evidence store. The pipeline produces three kinds of
+runs within one experiment:
+
+\begin{itemize}
+  \item \textbf{One run per trained model} (16 per full execution), created by
+    the training task itself as soon as the model is fitted. It records the
+    model type and label, the target output, the split settings, the
+    cross-validation settings, the selected hyperparameters (prefixed
+    \texttt{best\_}), train and test metrics (\texttt{train\_*},
+    \texttt{test\_*}), the fitted estimator with an inferred input/output
+    signature and an input example, and the complete cross-validation table
+    as a CSV artifact.
+  \item \textbf{One summary run} per execution with the model-comparison
+    table and the best model and RMSE per output.
+  \item \textbf{Verification evidence attached to the winner's run}: for each
+    test, metrics (\texttt{verification.<test>.<metric>}), parameters
+    (thresholds, subset sizes, sample counts), a pass/fail tag
+    (\texttt{verification.<test>}), an overall
+    \texttt{verification.status} tag, and the full structured report as a
+    JSON artifact (\texttt{verification/report.json}).
+\end{itemize}
+
+Because thresholds, measured values and outcomes are logged as MLflow
+parameters, metrics and tags, the evidence is queryable through the MLflow
+search API and UI (e.g.\ all runs with \texttt{verification.status =
+passed}), and the registered model version points back to the run holding
+its evidence. Prefect adds an execution-level trace (task names such as
+\texttt{train\_<model>\_<output>}, tags \texttt{training} and
+\texttt{verification}, retries and timings) when a Prefect server is used.
+
+% -----------------------------------------------------------------------------
+\subsection{Reproducibility and execution environment}
+\label{sec:methods:repro}
+
+The environment is fully pinned by a committed \texttt{uv.lock}
+(Table~\ref{tab:tools}); all stochastic components (train/test split,
+randomised search, estimators, LHS, subset sampling) derive from a single
+seed given on the command line (default 42). The training task is retried up
+to twice on failure and the data-loading task once. Hyperparameter search
+runs single-threaded by default (\texttt{n\_jobs: 1}); parallelism is
+obtained at the Prefect level, where the 16 training tasks are submitted
+concurrently to a thread-pool task runner. [TODO: report the hardware, the
+wall-clock time of a full execution, and the Prefect/MLflow deployment used
+for the reported results (local SQLite by default; a server deployment guide
+for Ubuntu is in \texttt{docs/DEPLOYMENT.md}).]
+
+% -----------------------------------------------------------------------------
+\subsection{Mapping to ASME V\&V 40 verification-side credibility factors}
+\label{sec:methods:vv40}
+
+[CHECK: the mapping below is the analyst's reconstruction from the code and
+the COU document; the repository itself only states that the suite is
+``inspired by ASME V\&V 40''. Please confirm the factor names and the
+credibility levels you intend to claim.]
+
+\begin{table}[htbp]
+  \centering
+  \caption{Tentative mapping between V\&V 40 verification-side activities and
+    pipeline stages.}
+  \label{tab:vv40}
+  \small
+  \begin{tabular}{p{3.4cm}p{5.2cm}p{4.6cm}}
+    \toprule
+    V\&V 40 factor (analogue for an ML surrogate) & Pipeline evidence & Automation status \\
+    \midrule
+    Code verification -- software quality assurance &
+      Typed configuration validation; strict data-schema validation; versioned code, configuration and lock file; pluggable test registry &
+      Automated \\
+    Code verification -- numerical code verification &
+      Reference skeletons from FE-model developers vs.\ pipeline implementation (\texttt{references/}) &
+      Manual (no automated tests in the package) \\
+    Calculation verification -- discretisation error (analogue: training-set size) &
+      Convergence test: MRE vs.\ subset size, minimum converging $k$ &
+      Automated, enabled \\
+    Calculation verification -- numerical solver error (analogue: training stochasticity) &
+      Numerical-error test: per-point std.\ dev.\ over repeated trainings &
+      Specified, not implemented \\
+    Calculation verification -- use error / input sensitivity (analogue: perturbation stability) &
+      Smoothness test: normalised partial derivatives on perturbed LHS points &
+      Automated, enabled \\
+    Input-space coverage &
+      LHS over configured admissible ranges &
+      Automated; sample size below COU requirement \\
+    Accuracy (validation-side, listed for completeness) &
+      \texttt{gate\_thresholds.validation} (MAE$_\infty$) &
+      Declared, not enforced \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% =============================================================================
+\section*{Analyst notes: misalignments with the abstract and open questions}
+\label{sec:notes}
+% Not part of the paper. Ordered by relevance to the abstract's claims.
+
+\paragraph{N1 -- DVC is not used.}
+The abstract states that the pipeline ``integrates DVC for data versioning''.
+The repository contains no \texttt{.dvc/} directory, no \texttt{*.dvc}
+pointer files, no \texttt{dvc.yaml}/\texttt{dvc.lock}, and DVC is not a
+dependency in \texttt{pyproject.toml} or \texttt{uv.lock}. The 72\,MB dataset
+is committed directly to Git. Data provenance is captured only by free-text
+fields in the configuration (\texttt{version: v1};
+\texttt{provenance: "<DOI or internal reference>"}, still a placeholder), and
+these fields are not logged to MLflow. Either DVC must be added (and the
+data-version hash logged with each run), or the abstract should be reworded
+(e.g.\ ``Git-versioned configuration and data'').
+
+\paragraph{N2 -- The accuracy threshold is declared but never enforced.}
+The abstract lists ``accuracy'' among the COU-derived thresholds the surrogate
+is assessed against. The configuration declares
+\texttt{gate\_thresholds.validation} (maximum absolute error
+$5.1\times10^{-5}$ and $7.3\times10^{-5}$), and the maximum absolute error is
+computed and logged as \texttt{test\_max\_ae}, but no code reads
+\texttt{gate\_thresholds}: winners are chosen by lowest test RMSE and
+registration is gated only on the verification tests. A model violating the
+COU accuracy requirement can therefore be registered. Question: is the
+validation gate intentionally left as a human-in-the-loop step (which would
+fit the abstract's conclusion), or is it a missing feature?
+
+\paragraph{N3 -- Numerical-error test is not implemented.}
+The abstract names ``numerical error'' as one of the assessed thresholds; the
+COU requires it. The test is commented out in the configuration, has no
+implementation in \texttt{bonestrength\_ml/verification/}, and its metric
+name (\texttt{MaxStandardDeviation}) exists only in the Pydantic enum. A
+reference skeleton exists in \texttt{references/TestNumericalError.py}, and
+the stale branch \texttt{origin/vv4ml-test} (June 2026, author CittiX) calls
+\texttt{vv4ml.run\_numerical\_error\_test} from an external package
+\texttt{vv4ml} that is not in this repository. Question: is \texttt{vv4ml} a
+separate library under development that will replace the in-package
+verification suite? If so, the paper should say which one is evaluated.
+
+\paragraph{N4 -- Input-space coverage falls short of the COU.}
+The COU requires at least $10^6$ samples of the input space; both tests
+default to 1\,000 LHS points (400 of which are used by the smoothness test),
+and the committed configuration does not override \texttt{lhs\_samples}. The
+commented-out \texttt{existence} test also uses 1\,000. Either the runs
+reported in the paper set \texttt{lhs\_samples} much higher (please confirm
+and document the value), or the ``input-space coverage'' factor should be
+reported as not met at the required level.
+
+\paragraph{N5 -- Convergence subsets are small relative to the training set.}
+With about 70\,\% of 45\,332 rows in training ($\approx$ 31\,000 rows), the
+largest convergence subset (1\,000 rows) is about 3\,\% of the training
+partition. ``Converged'' therefore means that a model trained on 1\,000 rows
+is within 5\,\% MRE of the winner, not that the error curve has flattened
+near the full size. Consider adding larger subsets (e.g.\ 5\,000, 10\,000,
+20\,000) or stating this limitation.
+
+\paragraph{N6 -- Traceability gaps in the logged evidence.}
+For a claim of a ``complete, traceable evidence chain'', the following are
+not logged to MLflow at present: the random seed, the dataset name/version/
+path (or a content hash), the configuration file (or its hash), and the
+Prefect flow-run id. MLflow does record the Git commit automatically when
+run from a repository, which partially covers code and configuration.
+Additionally, the per-run parameters \texttt{cv\_folds} and
+\texttt{optimization\_method} are taken from the \emph{global} optimisation
+block, so runs for random forest and XGBoost are logged as
+\texttt{GridSearch} although they use \texttt{RandomizedSearchCV}
+(\texttt{mlflow\_utils.py}, \texttt{log\_training\_result}).
+
+\paragraph{N7 -- Model selection on the test partition.}
+The winner is the model with the lowest RMSE on the same held-out partition
+whose metrics are then reported; there is no separate validation partition
+(cross-validation is used only inside each family's search). This is a
+common but debatable choice for a surrogate that will be assessed against
+absolute thresholds; a reviewer may ask for selection on cross-validation
+score instead.
+
+\paragraph{N8 -- Configuration options that are parsed but inert.}
+\texttt{preprocessing.normalization}, \texttt{preprocessing.standardization},
+\texttt{optimization.feature\_selection} and \texttt{optimization.scoring}
+are validated by Pydantic but have no effect (scoring is always RMSE; only
+the GPR pipeline standardises inputs). The configuration also still contains
+Italian design notes as comments. These should be removed or implemented
+before the package is archived.
+
+\paragraph{N9 -- No automated tests, no CI.}
+The package has no \texttt{tests/} directory and no CI configuration; the
+only executable check of the verification code is the comparison with the
+reference skeletons. This matters for the ``software quality assurance''
+row of Table~\ref{tab:vv40}.
+
+\paragraph{N10 -- Results are not in the package.}
+\texttt{mlruns/} and \texttt{mlruns.db} are git-ignored, so the evidence
+chain produced for the paper is not in the replication package. An exported
+MLflow experiment (or at least the \texttt{report.json} artifacts and the
+comparison table) should be archived alongside the code.
+
+\paragraph{N11 -- Dataset identity.}
+The file is named \texttt{sampleDataset.csv}, the code docstrings mention a
+$10^6$-row dataset, and the notebook comments say validation is ``expected to
+fail if config ranges don't match data''. Please confirm which dataset the
+reported experiments used, whether it is the published one referred to in
+the configuration's \texttt{source} field, and its citation.
+
+\paragraph{N12 -- Unmerged parallelism branch.}
+Branch \texttt{origin/optimize-training-cpu-parallelism} (June 2026) adds a
+bounded CPU budget for the hyperparameter search. If the reported runs used
+it, the execution-environment paragraph should say so and the branch should
+be merged before archiving.
+
+\paragraph{Open questions for the authors (summary).}
+\begin{enumerate}
+  \item Which V\&V 40 factors and credibility levels do you intend to claim
+    (to fill ``[N of M]'' in the abstract), and is Table~\ref{tab:vv40} the
+    mapping you have in mind?
+  \item Is the accuracy gate intentionally manual?
+  \item Will numerical-error and existence tests be implemented in this
+    package or in \texttt{vv4ml}?
+  \item What \texttt{lhs\_samples} value was used for the reported results?
+  \item Was DVC used in an environment outside this repository, or should it
+    be dropped from the abstract?
+  \item Which dataset and hardware were used, and how long did a full
+    execution take?
+\end{enumerate}
